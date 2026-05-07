@@ -950,21 +950,10 @@ fn choose_tool_choice(
 }
 
 fn build_turn_guidance(
-    smart_tool_selection: bool,
+    _smart_tool_selection: bool,
     stage: CreationTurnStage,
     tool_names: &[String],
 ) -> String {
-    if !smart_tool_selection {
-        if tool_names.is_empty() {
-            return "Manual tool selection mode is enabled and no tools are available on this turn. Ask at most two short follow-up questions.".to_string();
-        }
-
-        return format!(
-            "Manual tool selection mode is enabled. Use only these tools if they are clearly needed on this turn: {}. Prefer a single tool call, otherwise respond conversationally.",
-            tool_names.join(", ")
-        );
-    }
-
     if tool_names.is_empty() {
         return format!(
             "Current phase: {}. No tools are available on this turn. Ask at most two short follow-up questions, gather missing details, and do not invent IDs or state.",
@@ -1020,144 +1009,126 @@ fn build_creation_turn_plan(
     let lowered = latest_user_message.to_ascii_lowercase();
     let stage = infer_turn_stage(session, latest_user_message);
 
-    let mut tool_names = if smart_tool_selection {
-        let mut planned = Vec::new();
+    let mut tool_names = Vec::new();
 
-        match session.creation_goal {
-            CreationGoal::Character => match stage {
-                CreationTurnStage::Discovery => {}
-                CreationTurnStage::Drafting => {
-                    if !has_text(session.draft.name.as_deref()) {
-                        push_tool_name(&mut planned, "set_character_name");
-                    }
-                    if !has_text(session.draft.definition.as_deref())
-                        && !has_text(session.draft.description.as_deref())
-                    {
-                        push_tool_name(&mut planned, "set_character_definition");
-                    }
-                    if session.draft.scenes.is_empty() {
-                        push_tool_name(&mut planned, "add_scene");
-                    } else if user_requested_scene_work(&lowered)
-                        || session.creation_mode == CreationMode::Edit
-                    {
-                        push_tool_name(&mut planned, "update_scene");
-                    }
+    match session.creation_goal {
+        CreationGoal::Character => match stage {
+            CreationTurnStage::Discovery => {}
+            CreationTurnStage::Drafting => {
+                if !has_text(session.draft.name.as_deref()) {
+                    push_tool_name(&mut tool_names, "set_character_name");
                 }
-                CreationTurnStage::Preview => push_tool_name(&mut planned, "show_preview"),
-                CreationTurnStage::Finalize => push_tool_name(&mut planned, "request_confirmation"),
-            },
-            CreationGoal::Persona => match stage {
-                CreationTurnStage::Discovery => {}
-                CreationTurnStage::Drafting => push_tool_name(&mut planned, "upsert_persona"),
-                CreationTurnStage::Preview => push_tool_name(&mut planned, "show_preview"),
-                CreationTurnStage::Finalize => push_tool_name(&mut planned, "request_confirmation"),
-            },
-            CreationGoal::Lorebook => match stage {
-                CreationTurnStage::Discovery => {}
-                CreationTurnStage::Drafting => {
-                    push_tool_name(&mut planned, "upsert_lorebook");
-                    if session.target_id.is_some() || has_text(session.draft.name.as_deref()) {
-                        push_tool_name(&mut planned, "upsert_lorebook_entry");
-                        push_tool_name(&mut planned, "create_blank_lorebook_entry");
-                    }
+                if !has_text(session.draft.definition.as_deref())
+                    && !has_text(session.draft.description.as_deref())
+                {
+                    push_tool_name(&mut tool_names, "set_character_definition");
                 }
-                CreationTurnStage::Preview => push_tool_name(&mut planned, "show_preview"),
-                CreationTurnStage::Finalize => push_tool_name(&mut planned, "request_confirmation"),
-            },
-        }
-
-        if user_requested_visuals(&lowered) {
-            push_tool_name(&mut planned, "generate_image");
-            if infer_default_image_id(session).is_some() {
-                match session.creation_goal {
-                    CreationGoal::Character => {
-                        push_tool_name(&mut planned, "use_uploaded_image_as_avatar");
-                        if lowered.contains("background") {
-                            push_tool_name(&mut planned, "use_uploaded_image_as_chat_background");
-                        }
-                    }
-                    CreationGoal::Persona => {
-                        push_tool_name(&mut planned, "use_uploaded_image_as_persona_avatar");
-                    }
-                    CreationGoal::Lorebook => {}
+                if session.draft.scenes.is_empty() {
+                    push_tool_name(&mut tool_names, "add_scene");
+                } else if user_requested_scene_work(&lowered)
+                    || session.creation_mode == CreationMode::Edit
+                {
+                    push_tool_name(&mut tool_names, "update_scene");
                 }
             }
-            if lowered.contains("gradient") && session.creation_goal == CreationGoal::Character {
-                push_tool_name(&mut planned, "toggle_avatar_gradient");
+            CreationTurnStage::Preview => push_tool_name(&mut tool_names, "show_preview"),
+            CreationTurnStage::Finalize => {
+                push_tool_name(&mut tool_names, "request_confirmation")
+            }
+        },
+        CreationGoal::Persona => match stage {
+            CreationTurnStage::Discovery => {}
+            CreationTurnStage::Drafting => push_tool_name(&mut tool_names, "upsert_persona"),
+            CreationTurnStage::Preview => push_tool_name(&mut tool_names, "show_preview"),
+            CreationTurnStage::Finalize => {
+                push_tool_name(&mut tool_names, "request_confirmation")
+            }
+        },
+        CreationGoal::Lorebook => match stage {
+            CreationTurnStage::Discovery => {}
+            CreationTurnStage::Drafting => {
+                push_tool_name(&mut tool_names, "upsert_lorebook");
+                if session.target_id.is_some() || has_text(session.draft.name.as_deref()) {
+                    push_tool_name(&mut tool_names, "upsert_lorebook_entry");
+                    push_tool_name(&mut tool_names, "create_blank_lorebook_entry");
+                }
+            }
+            CreationTurnStage::Preview => push_tool_name(&mut tool_names, "show_preview"),
+            CreationTurnStage::Finalize => {
+                push_tool_name(&mut tool_names, "request_confirmation")
+            }
+        },
+    }
+
+    if user_requested_visuals(&lowered) {
+        push_tool_name(&mut tool_names, "generate_image");
+        if infer_default_image_id(session).is_some() {
+            match session.creation_goal {
+                CreationGoal::Character => {
+                    push_tool_name(&mut tool_names, "use_uploaded_image_as_avatar");
+                    if lowered.contains("background") {
+                        push_tool_name(&mut tool_names, "use_uploaded_image_as_chat_background");
+                    }
+                }
+                CreationGoal::Persona => {
+                    push_tool_name(&mut tool_names, "use_uploaded_image_as_persona_avatar");
+                }
+                CreationGoal::Lorebook => {}
             }
         }
-
-        if user_requested_model_tools(&lowered) && session.creation_goal == CreationGoal::Character
-        {
-            push_tool_name(&mut planned, "get_model_list");
-            push_tool_name(&mut planned, "set_default_model");
+        if lowered.contains("gradient") && session.creation_goal == CreationGoal::Character {
+            push_tool_name(&mut tool_names, "toggle_avatar_gradient");
         }
+    }
 
-        if user_requested_prompt_tools(&lowered) && session.creation_goal == CreationGoal::Character
-        {
-            push_tool_name(&mut planned, "get_system_prompt_list");
-            push_tool_name(&mut planned, "set_system_prompt");
+    if user_requested_model_tools(&lowered) && session.creation_goal == CreationGoal::Character {
+        push_tool_name(&mut tool_names, "get_model_list");
+        push_tool_name(&mut tool_names, "set_default_model");
+    }
+
+    if user_requested_prompt_tools(&lowered) && session.creation_goal == CreationGoal::Character {
+        push_tool_name(&mut tool_names, "get_system_prompt_list");
+        push_tool_name(&mut tool_names, "set_system_prompt");
+    }
+
+    if session.creation_goal == CreationGoal::Character
+        && session.target_type == Some(CreationGoal::Character)
+        && session.target_id.is_some()
+        && user_requested_lorebooks(&lowered)
+    {
+        push_tool_name(&mut tool_names, "list_character_lorebooks");
+        push_tool_name(&mut tool_names, "set_character_lorebooks");
+    }
+
+    if session.creation_goal == CreationGoal::Persona && user_requested_persona_admin(&lowered) {
+        push_tool_name(&mut tool_names, "list_personas");
+        push_tool_name(&mut tool_names, "get_default_persona");
+        if lowered.contains("delete") {
+            push_tool_name(&mut tool_names, "delete_persona");
         }
+    }
 
-        if session.creation_goal == CreationGoal::Character
-            && session.target_type == Some(CreationGoal::Character)
-            && session.target_id.is_some()
-            && user_requested_lorebooks(&lowered)
-        {
-            push_tool_name(&mut planned, "list_character_lorebooks");
-            push_tool_name(&mut planned, "set_character_lorebooks");
+    if session.creation_goal == CreationGoal::Lorebook && user_requested_lorebook_admin(&lowered) {
+        push_tool_name(&mut tool_names, "list_lorebooks");
+        if session.target_id.is_some() {
+            push_tool_name(&mut tool_names, "list_lorebook_entries");
         }
-
-        if session.creation_goal == CreationGoal::Persona && user_requested_persona_admin(&lowered)
-        {
-            push_tool_name(&mut planned, "list_personas");
-            push_tool_name(&mut planned, "get_default_persona");
-            if lowered.contains("delete") {
-                push_tool_name(&mut planned, "delete_persona");
-            }
+        if lowered.contains("reorder") {
+            push_tool_name(&mut tool_names, "reorder_lorebook_entries");
         }
-
-        if session.creation_goal == CreationGoal::Lorebook
-            && user_requested_lorebook_admin(&lowered)
-        {
-            push_tool_name(&mut planned, "list_lorebooks");
-            if session.target_id.is_some() {
-                push_tool_name(&mut planned, "list_lorebook_entries");
-            }
-            if lowered.contains("reorder") {
-                push_tool_name(&mut planned, "reorder_lorebook_entries");
-            }
-            if lowered.contains("delete") {
-                push_tool_name(&mut planned, "delete_lorebook");
-                push_tool_name(&mut planned, "delete_lorebook_entry");
-            }
+        if lowered.contains("delete") {
+            push_tool_name(&mut tool_names, "delete_lorebook");
+            push_tool_name(&mut tool_names, "delete_lorebook_entry");
         }
-
-        planned
-    } else {
-        all_tools.iter().map(|tool| tool.name.clone()).collect()
-    };
+    }
 
     if let Some(enabled) = enabled_tools {
         let enabled_set: HashSet<&str> = enabled.iter().map(|tool| tool.as_str()).collect();
         tool_names.retain(|tool| enabled_set.contains(tool.as_str()));
     }
 
-    let tools = if smart_tool_selection {
-        filter_tools_by_name(all_tools, &tool_names)
-    } else {
-        let enabled: HashSet<&str> = tool_names.iter().map(|name| name.as_str()).collect();
-        all_tools
-            .into_iter()
-            .filter(|tool| enabled.contains(tool.name.as_str()))
-            .collect()
-    };
-
-    let choice = if smart_tool_selection {
-        choose_tool_choice(stage, &tool_names, latest_user_message)
-    } else {
-        None
-    };
+    let tools = filter_tools_by_name(all_tools, &tool_names);
+    let choice = choose_tool_choice(stage, &tool_names, latest_user_message);
 
     CreationTurnPlan {
         stage,
@@ -2522,10 +2493,7 @@ async fn process_assistant_turn(
         .and_then(|v| v.as_str())
         .unwrap_or(provider_id);
 
-    let smart_tool_selection = advanced_settings
-        .and_then(|a| a.get("creationHelperSmartToolSelection"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+    let smart_tool_selection = true;
 
     let enabled_tools: Option<Vec<String>> = advanced_settings
         .and_then(|a| a.get("creationHelperEnabledTools"))

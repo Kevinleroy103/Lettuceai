@@ -5,7 +5,6 @@
 use super::types::{CreationGoal, CreationMode};
 use crate::chat_manager::tooling::ToolDefinition;
 use serde_json::json;
-use std::collections::HashSet;
 
 fn character_format_guidance() -> &'static str {
     r#"## Character Format Guidance
@@ -27,12 +26,8 @@ fn character_format_guidance() -> &'static str {
 /// Get all tool definitions for the creation helper
 pub fn get_creation_helper_tools(
     goal: &CreationGoal,
-    smart_selection: bool,
+    _smart_selection: bool,
 ) -> Vec<ToolDefinition> {
-    if !smart_selection {
-        return all_tools();
-    }
-
     match goal {
         CreationGoal::Character => character_tools(),
         CreationGoal::Persona => persona_tools(),
@@ -290,34 +285,8 @@ pub fn get_creation_helper_system_prompt(
     mode: &CreationMode,
     target_type: Option<&CreationGoal>,
     target_id: Option<&str>,
-    smart_selection: bool,
+    _smart_selection: bool,
 ) -> String {
-    if !smart_selection {
-        return format!(
-            r#"You are a creation assistant for a roleplay app. You can help create characters, personas, or lorebooks based on the user's request.
-
-## Your Approach
-1. Use the user's request to decide what to create (character, persona, or lorebook)
-2. Ask 1-2 follow-up questions only if needed to gather key details
-3. Use the available tools to build the requested entity
-
-## Guidelines
-- Keep responses conversational and helpful
-- Ask 1-2 questions at a time
-- Use tools proactively once details are clear
-
-## Tools Available
-- Character tools: set_character_name, set_character_definition, add_scene, update_scene, toggle_avatar_gradient, set_default_model, set_system_prompt, get_system_prompt_list, get_model_list, use_uploaded_image_as_avatar, use_uploaded_image_as_chat_background, generate_image, show_preview, request_confirmation, list_character_lorebooks, set_character_lorebooks
-- Persona tools: list_personas, upsert_persona, use_uploaded_image_as_persona_avatar, generate_image, show_preview, request_confirmation, delete_persona, get_default_persona
-- Lorebook tools: list_lorebooks, upsert_lorebook, delete_lorebook, list_lorebook_entries, get_lorebook_entry, upsert_lorebook_entry, delete_lorebook_entry, create_blank_lorebook_entry, reorder_lorebook_entries, show_preview, request_confirmation
-
-{}
-
-Remember: You are helping the user create something useful for roleplay. Make the process fun and collaborative!"#,
-            character_format_guidance()
-        );
-    }
-
     let mut base = match goal {
         CreationGoal::Character => format!(
             r#"You are a character creation assistant for a roleplay app. Your goal is to help the user create a compelling character through conversation.
@@ -433,19 +402,6 @@ Remember: Lorebooks should be clear, scannable, and useful in roleplay. Make the
     }
 
     base
-}
-
-fn all_tools() -> Vec<ToolDefinition> {
-    let mut combined = Vec::new();
-    combined.extend(character_tools());
-    combined.extend(persona_tools());
-    combined.extend(lorebook_tools());
-
-    let mut seen = HashSet::new();
-    combined
-        .into_iter()
-        .filter(|tool| seen.insert(tool.name.clone()))
-        .collect()
 }
 
 fn persona_tools() -> Vec<ToolDefinition> {

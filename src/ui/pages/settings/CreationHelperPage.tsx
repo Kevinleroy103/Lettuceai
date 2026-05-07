@@ -7,13 +7,11 @@ import {
   Check,
   Zap,
   PenTool,
-  Eye,
   MessageSquare,
   User,
   FileImage,
   Palette,
   Settings2,
-  CheckCircle2,
   BookOpen,
   List,
   Info,
@@ -116,14 +114,14 @@ const CREATION_HELPER_TOOLS = [
     id: "show_preview",
     name: "Show Preview",
     description: "Preview the character",
-    icon: Eye,
+    icon: Sparkles,
     category: "flow",
   },
   {
     id: "request_confirmation",
     name: "Request Confirmation",
     description: "Ask to save or continue",
-    icon: CheckCircle2,
+    icon: Check,
     category: "flow",
   },
   {
@@ -162,69 +160,6 @@ const CREATION_HELPER_TOOLS = [
     category: "persona",
   },
   {
-    id: "list_lorebooks",
-    name: "List Lorebooks",
-    description: "Browse lorebooks",
-    icon: List,
-    category: "lorebook",
-  },
-  {
-    id: "upsert_lorebook",
-    name: "Save Lorebook",
-    description: "Create or update a lorebook",
-    icon: BookOpen,
-    category: "lorebook",
-  },
-  {
-    id: "delete_lorebook",
-    name: "Delete Lorebook",
-    description: "Remove a lorebook",
-    icon: Check,
-    category: "lorebook",
-  },
-  {
-    id: "list_lorebook_entries",
-    name: "List Entries",
-    description: "View lorebook entries",
-    icon: List,
-    category: "lorebook",
-  },
-  {
-    id: "get_lorebook_entry",
-    name: "Get Entry",
-    description: "Fetch a lorebook entry",
-    icon: BookOpen,
-    category: "lorebook",
-  },
-  {
-    id: "upsert_lorebook_entry",
-    name: "Save Entry",
-    description: "Create or update an entry",
-    icon: PenTool,
-    category: "lorebook",
-  },
-  {
-    id: "delete_lorebook_entry",
-    name: "Delete Entry",
-    description: "Remove a lorebook entry",
-    icon: Check,
-    category: "lorebook",
-  },
-  {
-    id: "create_blank_lorebook_entry",
-    name: "Blank Entry",
-    description: "Create a placeholder entry",
-    icon: PenTool,
-    category: "lorebook",
-  },
-  {
-    id: "reorder_lorebook_entries",
-    name: "Reorder Entries",
-    description: "Change entry ordering",
-    icon: List,
-    category: "lorebook",
-  },
-  {
     id: "list_character_lorebooks",
     name: "List Character Lorebooks",
     description: "See lorebooks for a character",
@@ -247,7 +182,6 @@ const TOOL_CATEGORIES = {
   settings: { label: "Settings", color: "rose" },
   flow: { label: "Flow", color: "cyan" },
   persona: { label: "Personas", color: "purple" },
-  lorebook: { label: "Lorebooks", color: "amber" },
 } as const;
 
 const TOOL_PRESETS = [
@@ -434,7 +368,6 @@ export function CreationHelperPage() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [imageModelId, setImageModelId] = useState<string | null>(null);
-  const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [enabledTools, setEnabledTools] = useState<string[]>(
     CREATION_HELPER_TOOLS.map((t) => t.id),
   );
@@ -452,10 +385,11 @@ export function CreationHelperPage() {
         setSelectedModelId(settings.advancedSettings?.creationHelperModelId ?? null);
         setStreamingEnabled(settings.advancedSettings?.creationHelperStreaming ?? true);
         setImageModelId(settings.advancedSettings?.creationHelperImageModelId ?? null);
-        setSmartToolSelection(settings.advancedSettings?.creationHelperSmartToolSelection ?? true);
         setEnabledTools(
-          settings.advancedSettings?.creationHelperEnabledTools ??
-            CREATION_HELPER_TOOLS.map((t) => t.id),
+          (settings.advancedSettings?.creationHelperEnabledTools ??
+            CREATION_HELPER_TOOLS.map((t) => t.id)).filter((toolId) =>
+            CREATION_HELPER_TOOLS.some((tool) => tool.id === toolId),
+          ),
         );
         setIsLoading(false);
       } catch (err) {
@@ -472,7 +406,6 @@ export function CreationHelperPage() {
       creationHelperModelId: string | undefined;
       creationHelperStreaming: boolean;
       creationHelperImageModelId: string | undefined;
-      creationHelperSmartToolSelection: boolean;
       creationHelperEnabledTools: string[];
     }>,
   ) => {
@@ -503,12 +436,6 @@ export function CreationHelperPage() {
   const handleImageModelChange = async (modelId: string | null) => {
     setImageModelId(modelId);
     await saveSettings({ creationHelperImageModelId: modelId ?? undefined });
-  };
-
-  const handleSmartToolToggle = async () => {
-    const newValue = !smartToolSelection;
-    setSmartToolSelection(newValue);
-    await saveSettings({ creationHelperSmartToolSelection: newValue });
   };
 
   const handleToolToggle = async (toolId: string) => {
@@ -726,193 +653,156 @@ export function CreationHelperPage() {
                 {t("creationHelper.page.toolSelection")}
               </h3>
 
-              {/* Smart Tool Selection Toggle */}
               <div className="rounded-xl border border-fg/10 bg-fg/5 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg border border-info/30 bg-info/10 p-1.5">
-                      <Wand2 className="h-4 w-4 text-info" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-fg">
-                        {t("creationHelper.page.smartToolSelection")}
-                      </span>
-                      <p className="text-[11px] text-fg/45">
-                        {t("creationHelper.page.smartToolDescription")}
-                      </p>
-                    </div>
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg border border-info/30 bg-info/10 p-1.5">
+                    <Sparkles className="h-4 w-4 text-info" />
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={smartToolSelection}
-                      onChange={handleSmartToolToggle}
-                      className="sr-only peer"
-                    />
-                    <div
-                      className={cn(
-                        "w-9 h-5 rounded-full transition-colors",
-                        smartToolSelection ? "bg-info" : "bg-fg/20",
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "absolute top-0.5 left-0.5 w-4 h-4 bg-fg rounded-full transition-transform shadow-sm",
-                          smartToolSelection && "translate-x-4",
-                        )}
-                      />
-                    </div>
-                  </label>
-                </div>
-                <div className="mt-3 rounded-lg border border-fg/10 bg-fg/5 px-3 py-2 text-[11px] text-fg/60">
-                  {smartToolSelection
-                    ? t("creationHelper.page.smartToolEnabledHint")
-                    : t("creationHelper.page.smartToolDisabledHint")}
+                  <div>
+                    <span className="text-sm font-medium text-fg">Agent Controls</span>
+                    <p className="text-[11px] text-fg/45">
+                      The helper always stays goal-scoped. It can only use the tools you leave
+                      enabled here.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Tool Presets - shown when smart selection is OFF */}
-              {!smartToolSelection && (
-                <>
-                  <div className="space-y-3">
-                    <p className="text-xs text-fg/50 px-1">
-                      {t("creationHelper.page.quickPresets")}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {TOOL_PRESETS.map((preset) => (
-                        <button
-                          key={preset.id}
-                          onClick={() => handlePresetSelect(preset.id)}
+              <div className="space-y-3">
+                <p className="text-xs text-fg/50 px-1">
+                  {t("creationHelper.page.quickPresets")}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {TOOL_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => handlePresetSelect(preset.id)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5 text-center transition-all",
+                        currentPreset === preset.id
+                          ? "border-danger/40 bg-danger/15 text-danger"
+                          : "border-fg/10 bg-fg/5 text-fg/60 hover:border-fg/20",
+                      )}
+                    >
+                      <span className="text-xs font-medium">
+                        {PRESET_TEXT_KEYS[preset.id]
+                          ? t(PRESET_TEXT_KEYS[preset.id].name)
+                          : preset.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {currentPreset === "custom" && (
+                  <p className="text-[11px] text-warning/70 px-1">
+                    {t("creationHelper.page.customSelection", { count: enabledTools.length })}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {Object.entries(groupedTools).map(([category, tools]) => {
+                  const categoryInfo = TOOL_CATEGORIES[category as keyof typeof TOOL_CATEGORIES];
+                  const colorMap = {
+                    blue: {
+                      badge: "border-info/30 bg-info/10 text-info/80",
+                    },
+                    emerald: {
+                      badge: "border-accent/30 bg-accent/10 text-accent/80",
+                    },
+                    amber: {
+                      badge: "border-warning/30 bg-warning/10 text-warning/80",
+                    },
+                    rose: {
+                      badge: "border-danger/30 bg-danger/10 text-danger/80",
+                    },
+                    cyan: {
+                      badge: "border-info/30 bg-info/10 text-info/80",
+                    },
+                    purple: {
+                      badge: "border-secondary/30 bg-secondary/10 text-secondary/80",
+                    },
+                  };
+
+                  const categoryColors =
+                    colorMap[categoryInfo.color as keyof typeof colorMap] ?? colorMap.blue;
+
+                  return (
+                    <div key={category} className="space-y-2">
+                      <div className="flex items-center gap-2 px-1">
+                        <span
                           className={cn(
-                            "rounded-xl border px-3 py-2.5 text-center transition-all",
-                            currentPreset === preset.id
-                              ? "border-danger/40 bg-danger/15 text-danger"
-                              : "border-fg/10 bg-fg/5 text-fg/60 hover:border-fg/20",
+                            "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                            categoryColors.badge,
                           )}
                         >
-                          <span className="text-xs font-medium">
-                            {PRESET_TEXT_KEYS[preset.id]
-                              ? t(PRESET_TEXT_KEYS[preset.id].name)
-                              : preset.name}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    {currentPreset === "custom" && (
-                      <p className="text-[11px] text-warning/70 px-1">
-                        {t("creationHelper.page.customSelection", { count: enabledTools.length })}
-                      </p>
-                    )}
-                  </div>
+                          {CATEGORY_LABEL_KEYS[category]
+                            ? t(CATEGORY_LABEL_KEYS[category])
+                            : categoryInfo.label}
+                        </span>
+                      </div>
 
-                  {/* Tool List */}
-                  <div className="space-y-4">
-                    {Object.entries(groupedTools).map(([category, tools]) => {
-                      const categoryInfo =
-                        TOOL_CATEGORIES[category as keyof typeof TOOL_CATEGORIES];
-                      const colorMap = {
-                        blue: {
-                          badge: "border-info/30 bg-info/10 text-info/80",
-                        },
-                        emerald: {
-                          badge: "border-accent/30 bg-accent/10 text-accent/80",
-                        },
-                        amber: {
-                          badge: "border-warning/30 bg-warning/10 text-warning/80",
-                        },
-                        rose: {
-                          badge: "border-danger/30 bg-danger/10 text-danger/80",
-                        },
-                        cyan: {
-                          badge: "border-info/30 bg-info/10 text-info/80",
-                        },
-                        purple: {
-                          badge: "border-secondary/30 bg-secondary/10 text-secondary/80",
-                        },
-                      };
+                      <div className="rounded-xl border border-fg/10 bg-fg/5 overflow-hidden divide-y divide-fg/5">
+                        {tools.map((tool) => {
+                          const Icon = tool.icon;
+                          const isEnabled = enabledTools.includes(tool.id);
 
-                      const categoryColors =
-                        colorMap[categoryInfo.color as keyof typeof colorMap] ?? colorMap.blue;
-
-                      return (
-                        <div key={category} className="space-y-2">
-                          <div className="flex items-center gap-2 px-1">
-                            <span
+                          return (
+                            <button
+                              key={tool.id}
+                              onClick={() => handleToolToggle(tool.id)}
                               className={cn(
-                                "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-                                categoryColors.badge,
+                                "w-full flex items-center gap-3 px-4 py-3 text-left",
+                                "transition-colors hover:bg-fg/5",
                               )}
                             >
-                              {CATEGORY_LABEL_KEYS[category]
-                                ? t(CATEGORY_LABEL_KEYS[category])
-                                : categoryInfo.label}
-                            </span>
-                          </div>
-
-                          <div className="rounded-xl border border-fg/10 bg-fg/5 overflow-hidden divide-y divide-fg/5">
-                            {tools.map((tool) => {
-                              const Icon = tool.icon;
-                              const isEnabled = enabledTools.includes(tool.id);
-
-                              return (
-                                <button
-                                  key={tool.id}
-                                  onClick={() => handleToolToggle(tool.id)}
+                              <div
+                                className={cn(
+                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                                  isEnabled ? "border-fg/20 bg-fg/10" : "border-fg/10 bg-fg/5",
+                                )}
+                              >
+                                <Icon
                                   className={cn(
-                                    "w-full flex items-center gap-3 px-4 py-3 text-left",
-                                    "transition-colors hover:bg-fg/5",
+                                    "h-4 w-4 transition-colors",
+                                    isEnabled ? "text-fg/70" : "text-fg/30",
+                                  )}
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span
+                                  className={cn(
+                                    "text-sm font-medium",
+                                    isEnabled ? "text-fg" : "text-fg/50",
                                   )}
                                 >
-                                  <div
-                                    className={cn(
-                                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
-                                      isEnabled ? "border-fg/20 bg-fg/10" : "border-fg/10 bg-fg/5",
-                                    )}
-                                  >
-                                    <Icon
-                                      className={cn(
-                                        "h-4 w-4 transition-colors",
-                                        isEnabled ? "text-fg/70" : "text-fg/30",
-                                      )}
-                                    />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <span
-                                      className={cn(
-                                        "text-sm font-medium",
-                                        isEnabled ? "text-fg" : "text-fg/50",
-                                      )}
-                                    >
-                                      {TOOL_TEXT_KEYS[tool.id]
-                                        ? t(TOOL_TEXT_KEYS[tool.id].name)
-                                        : tool.name}
-                                    </span>
-                                    <p className="text-[11px] text-fg/40 truncate">
-                                      {TOOL_TEXT_KEYS[tool.id]
-                                        ? t(TOOL_TEXT_KEYS[tool.id].desc)
-                                        : tool.description}
-                                    </p>
-                                  </div>
-                                  <div
-                                    className={cn(
-                                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all",
-                                      isEnabled
-                                        ? "border-accent/50 bg-accent/20"
-                                        : "border-fg/15 bg-fg/5",
-                                    )}
-                                  >
-                                    {isEnabled && <Check className="h-3 w-3 text-accent/80" />}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+                                  {TOOL_TEXT_KEYS[tool.id]
+                                    ? t(TOOL_TEXT_KEYS[tool.id].name)
+                                    : tool.name}
+                                </span>
+                                <p className="text-[11px] text-fg/40 truncate">
+                                  {TOOL_TEXT_KEYS[tool.id]
+                                    ? t(TOOL_TEXT_KEYS[tool.id].desc)
+                                    : tool.description}
+                                </p>
+                              </div>
+                              <div
+                                className={cn(
+                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all",
+                                  isEnabled
+                                    ? "border-accent/50 bg-accent/20"
+                                    : "border-fg/15 bg-fg/5",
+                                )}
+                              >
+                                {isEnabled && <Check className="h-3 w-3 text-accent/80" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

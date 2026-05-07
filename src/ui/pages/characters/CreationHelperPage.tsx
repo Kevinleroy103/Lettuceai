@@ -12,17 +12,16 @@ import {
   Image as ImageIcon,
   Eye,
   User,
-  BookOpen,
 } from "lucide-react";
 import { TopNav } from "../../components/App";
 import { cn, typography, animations, radius } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuSection } from "../../components";
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
-import { CharacterPreviewCard, PersonaPreviewCard, LorebookPreviewCard } from "./components";
+import { CharacterPreviewCard, PersonaPreviewCard } from "./components";
 import { CreationHelperFooter } from "./components/CreationHelperFooter";
 import { ReferenceSelector, ReferenceAvatar, Reference } from "./components/ReferenceSelector";
 import { convertToImageUrl } from "../../../core/storage/images";
-import { listCharacters, listPersonas, readSettings } from "../../../core/storage/repo";
+import { listCharacters, listPersonas } from "../../../core/storage/repo";
 import { isRenderableImageUrl } from "../../../core/utils/image";
 
 interface CreationMessage {
@@ -74,40 +73,18 @@ interface PreviewPersona {
   isDefault?: boolean;
 }
 
-interface PreviewLorebook {
-  id?: string;
-  name?: string;
-}
-
-interface PreviewLorebookEntry {
-  id: string;
-  lorebookId?: string;
-  title?: string;
-  content?: string;
-  keywords?: string[];
-  alwaysActive?: boolean;
-  enabled?: boolean;
-  displayOrder?: number;
-}
-
 interface CreationSession {
   id: string;
   messages: CreationMessage[];
   draft: DraftCharacter;
   draftHistory: DraftCharacter[];
-  creationGoal: "character" | "persona" | "lorebook";
+  creationGoal: "character" | "persona";
   creationMode: "create" | "edit";
-  targetType?: "character" | "persona" | "lorebook" | null;
+  targetType?: "character" | "persona" | null;
   targetId?: string | null;
   status: "active" | "previewShown" | "completed" | "cancelled";
   createdAt: number;
   updatedAt: number;
-}
-
-interface CreationSessionSummary {
-  id: string;
-  creationMode: "create" | "edit";
-  status: "active" | "previewShown" | "completed" | "cancelled";
 }
 
 interface CreationHelperUpdatePayload {
@@ -289,19 +266,14 @@ export function CreationHelperPage() {
   const targetTypeParam = searchParams.get("targetType");
   const targetIdParam = searchParams.get("targetId");
   const creationGoal: CreationSession["creationGoal"] =
-    creationGoalParam === "persona" || creationGoalParam === "lorebook"
-      ? creationGoalParam
-      : "character";
+    creationGoalParam === "persona" ? "persona" : "character";
   const creationMode: CreationSession["creationMode"] = modeParam === "edit" ? "edit" : "create";
   const targetType: CreationSession["targetType"] =
-    targetTypeParam === "character" ||
-    targetTypeParam === "persona" ||
-    targetTypeParam === "lorebook"
+    targetTypeParam === "character" || targetTypeParam === "persona"
       ? targetTypeParam
       : null;
   const targetId = targetIdParam?.trim() || null;
   const [session, setSession] = useState<CreationSession | null>(null);
-  const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -367,13 +339,7 @@ export function CreationHelperPage() {
     return fallback;
   }, []);
   const activeGoal = session?.creationGoal ?? creationGoal;
-  const goalLabel = smartToolSelection
-    ? activeGoal === "persona"
-      ? "Persona"
-      : activeGoal === "lorebook"
-        ? "Lorebook"
-        : "Character"
-    : "Creator";
+  const goalLabel = activeGoal === "persona" ? "Persona" : "Character";
 
   // Load entity avatars for reference lookup
   useEffect(() => {
@@ -412,9 +378,7 @@ export function CreationHelperPage() {
       }
       initGuardRef.current = initKey;
       try {
-        const settings = await readSettings();
-        const smartSelection = settings.advancedSettings?.creationHelperSmartToolSelection ?? true;
-        setSmartToolSelection(smartSelection);
+        const smartSelection = true;
 
         let resumedSession: CreationSession | null = null;
         const requestedSessionId = sessionIdParam?.trim() || null;
@@ -423,23 +387,6 @@ export function CreationHelperPage() {
           resumedSession = await invoke<CreationSession | null>("creation_helper_get_session", {
             sessionId: requestedSessionId,
           });
-        }
-
-        if (!resumedSession && creationMode !== "edit") {
-          const summaries = await invoke<CreationSessionSummary[]>(
-            "creation_helper_list_sessions",
-            {
-              creationGoal,
-            },
-          );
-          const latestCreate = summaries.find(
-            (s) => s.creationMode === "create" && s.status !== "completed",
-          );
-          if (latestCreate) {
-            resumedSession = await invoke<CreationSession | null>("creation_helper_get_session", {
-              sessionId: latestCreate.id,
-            });
-          }
         }
 
         if (resumedSession) {
@@ -466,9 +413,7 @@ export function CreationHelperPage() {
               : smartSelection
                 ? creationGoal === "persona"
                   ? "Hi! I want to create a new persona."
-                  : creationGoal === "lorebook"
-                    ? "Hi! I want to create a new lorebook."
-                    : "Hi! I want to create a new character."
+                  : "Hi! I want to create a new character."
                 : "Hi! I want to create something new.",
           uploadedImages: null,
         });
@@ -1179,26 +1124,14 @@ export function CreationHelperPage() {
     [imageGenerations],
   );
 
-  const { previewPersona, previewLorebook, previewLorebookEntries } = useMemo(() => {
-    const data: {
-      persona: PreviewPersona | null;
-      lorebook: PreviewLorebook | null;
-      entries: PreviewLorebookEntry[];
-    } = {
+  const previewPersona = useMemo(() => {
+    const data: { persona: PreviewPersona | null } = {
       persona: null,
-      lorebook: null,
-      entries: [],
     };
 
     if (!session?.messages?.length) {
-      return {
-        previewPersona: data.persona,
-        previewLorebook: data.lorebook,
-        previewLorebookEntries: data.entries,
-      };
+      return data.persona;
     }
-
-    const entriesById = new Map<string, PreviewLorebookEntry>();
 
     for (const message of session.messages) {
       if (!message.toolResults?.length) continue;
@@ -1209,37 +1142,8 @@ export function CreationHelperPage() {
         if (payload.persona && typeof payload.persona === "object") {
           data.persona = payload.persona as PreviewPersona;
         }
-
-        if (payload.lorebook && typeof payload.lorebook === "object") {
-          data.lorebook = payload.lorebook as PreviewLorebook;
-        }
-
-        if (Array.isArray(payload.entries)) {
-          for (const entry of payload.entries) {
-            if (entry?.id) entriesById.set(entry.id, entry as PreviewLorebookEntry);
-          }
-        }
-
-        if (payload.entry && typeof payload.entry === "object" && payload.entry.id) {
-          entriesById.set(payload.entry.id, payload.entry as PreviewLorebookEntry);
-        }
       }
     }
-
-    const allEntries = Array.from(entriesById.values());
-    const lorebookId = data.lorebook?.id;
-    const filteredEntries = lorebookId
-      ? allEntries.filter((entry) => entry.lorebookId === lorebookId)
-      : allEntries;
-
-    filteredEntries.sort((a, b) => {
-      const orderA = a.displayOrder ?? 0;
-      const orderB = b.displayOrder ?? 0;
-      if (orderA !== orderB) return orderA - orderB;
-      return (a.title ?? "").localeCompare(b.title ?? "");
-    });
-
-    data.entries = filteredEntries;
 
     const fallbackPersona =
       data.persona ||
@@ -1255,36 +1159,16 @@ export function CreationHelperPage() {
           }
         : null);
 
-    const fallbackLorebook =
-      data.lorebook ||
-      (session?.draft?.name
-        ? {
-            id:
-              session?.creationMode === "edit" && session?.targetType === "lorebook"
-                ? (session.targetId ?? undefined)
-                : undefined,
-            name: session.draft.name,
-          }
-        : null);
-
-    return {
-      previewPersona: fallbackPersona,
-      previewLorebook: fallbackLorebook,
-      previewLorebookEntries: data.entries,
-    };
+    return fallbackPersona;
   }, [session?.messages, session?.draft]);
 
   const previewTitle = showConfirmation
     ? activeGoal === "persona"
       ? "Ready to Save Persona?"
-      : activeGoal === "lorebook"
-        ? "Ready to Save Lorebook?"
-        : "Ready to Save?"
+      : "Ready to Save?"
     : activeGoal === "persona"
       ? "Persona Preview"
-      : activeGoal === "lorebook"
-        ? "Lorebook Preview"
-        : "Character Preview";
+      : "Character Preview";
 
   const handleOpenPersona = useCallback(async () => {
     const personaId =
@@ -1309,36 +1193,6 @@ export function CreationHelperPage() {
   }, [
     navigate,
     previewPersona?.id,
-    session?.creationMode,
-    session?.id,
-    session?.targetId,
-    session?.targetType,
-    resolveErrorMessage,
-  ]);
-
-  const handleOpenLorebook = useCallback(async () => {
-    const lorebookId =
-      session?.creationMode === "edit" && session?.targetType === "lorebook"
-        ? session.targetId
-        : previewLorebook?.id;
-    if (!lorebookId) return;
-
-    if (session?.creationMode === "edit" && session?.targetType === "lorebook") {
-      try {
-        await invoke("creation_helper_complete", {
-          sessionId: session.id,
-        });
-      } catch (err) {
-        console.error("Failed to save lorebook edit:", err);
-        setError(resolveErrorMessage(err, "Failed to save lorebook changes."));
-        return;
-      }
-    }
-
-    navigate(`/library/lorebooks/${lorebookId}`);
-  }, [
-    navigate,
-    previewLorebook?.id,
     session?.creationMode,
     session?.id,
     session?.targetId,
@@ -1393,13 +1247,9 @@ export function CreationHelperPage() {
                 AI {goalLabel} Creator
               </h2>
               <p className="text-fg/60 text-sm max-w-xs">
-                {!smartToolSelection
-                  ? "Tell me what you'd like to create and I'll help you build it."
-                  : activeGoal === "persona"
-                    ? "I'll help you create a persona through conversation. Tell me who you want to be."
-                    : activeGoal === "lorebook"
-                      ? "I'll help you craft a lorebook through conversation. Tell me about your world."
-                      : "I'll help you create a character through conversation. Just tell me what you have in mind!"}
+                {activeGoal === "persona"
+                  ? "I'll help you create a persona through conversation. Tell me who you want to be."
+                  : "I'll help you create a character through conversation. Just tell me what you have in mind!"}
               </p>
               <div className="mt-4 flex items-center gap-1">
                 <Loader2 className="h-4 w-4 text-fg/40 animate-spin" />
@@ -1839,46 +1689,6 @@ export function CreationHelperPage() {
           </div>
         )}
 
-        {activeGoal === "lorebook" && (
-          <div className="space-y-4">
-            <LorebookPreviewCard lorebook={previewLorebook} entries={previewLorebookEntries} />
-
-            <MenuSection>
-              <MenuButton
-                icon={BookOpen}
-                title={
-                  session?.creationMode === "edit" && session?.targetType === "lorebook"
-                    ? "Save Lorebook Changes"
-                    : "Open Lorebook"
-                }
-                description={
-                  session?.creationMode === "edit" && session?.targetType === "lorebook"
-                    ? "Apply updates to existing lorebook"
-                    : previewLorebook?.id
-                      ? "Review entries in the library"
-                      : "Create a lorebook first"
-                }
-                color="from-accent to-accent/80"
-                onClick={handleOpenLorebook}
-                disabled={
-                  session?.creationMode === "edit" && session?.targetType === "lorebook"
-                    ? !session?.targetId
-                    : !previewLorebook?.id
-                }
-              />
-              <MenuButton
-                icon={RefreshCw}
-                title="Keep Editing"
-                description="Continue the conversation"
-                color="from-info to-info/80"
-                onClick={() => {
-                  setShowPreview(false);
-                  setShowConfirmation(false);
-                }}
-              />
-            </MenuSection>
-          </div>
-        )}
       </BottomMenu>
 
       {/* Tool Detail Bottom Sheet */}

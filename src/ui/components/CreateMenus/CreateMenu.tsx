@@ -11,12 +11,10 @@ import {
 } from "lucide-react";
 import { BottomMenu, MenuButton, MenuDivider, MenuSection } from "../BottomMenu";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   listCharacters,
-  listLorebooks,
   listPersonas,
-  readSettings,
   saveLorebook,
 } from "../../../core/storage/repo";
 import { invoke } from "@tauri-apps/api/core";
@@ -25,7 +23,7 @@ import { useAvatar } from "../../hooks/useAvatar";
 import { importLorebook, readFileAsText } from "../../../core/storage/lorebookTransfer";
 import { useI18n } from "../../../core/i18n/context";
 
-type CreationGoal = "character" | "persona" | "lorebook";
+type CreationGoal = "character" | "persona";
 type CreationStatus = "active" | "previewShown" | "completed" | "cancelled";
 
 interface CreationSessionSummary {
@@ -93,25 +91,12 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   const [lorebookName, setLorebookName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isImportingLorebook, setIsImportingLorebook] = useState(false);
-  const [smartToolSelection, setSmartToolSelection] = useState(true);
   const [selectedGoal, setSelectedGoal] = useState<CreationGoal | null>(null);
   const [goalSessions, setGoalSessions] = useState<CreationSessionSummary[]>([]);
   const [loadingGoalSessions, setLoadingGoalSessions] = useState(false);
   const [editTargets, setEditTargets] = useState<EditTarget[]>([]);
   const [loadingEditTargets, setLoadingEditTargets] = useState(false);
   const lorebookImportInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const settings = await readSettings();
-        setSmartToolSelection(settings.advancedSettings?.creationHelperSmartToolSelection ?? true);
-      } catch (err) {
-        console.error("Failed to load settings:", err);
-      }
-    };
-    void loadSettings();
-  }, []);
 
   const handleClose = () => {
     onClose();
@@ -171,11 +156,6 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
       label: t("components.createMenu.persona"),
       color: "from-purple-500 to-purple-600",
       icon: Brain,
-    },
-    lorebook: {
-      label: t("components.createMenu.lorebook"),
-      color: "from-amber-500 to-amber-600",
-      icon: BookOpen,
     },
   };
 
@@ -239,14 +219,6 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             title: p.title || t("components.createMenu.untitledPersona"),
             avatarPath: p.avatarPath,
             avatarCrop: p.avatarCrop ?? null,
-          })),
-        );
-      } else {
-        const items = await listLorebooks();
-        setEditTargets(
-          items.map((l) => ({
-            id: l.id,
-            title: l.name || t("components.createMenu.untitledLorebook"),
           })),
         );
       }
@@ -323,14 +295,7 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             title={t("components.createMenu.smartCreator")}
             description={t("components.createMenu.smartCreatorDesc")}
             color="from-rose-500 to-rose-600"
-            onClick={() => {
-              if (smartToolSelection) {
-                setMode("ai-helper");
-              } else {
-                onClose();
-                navigate("/create/character/helper?goal=character");
-              }
-            }}
+            onClick={() => setMode("ai-helper")}
           />
 
           <MenuDivider label={t("components.createMenu.divider")} />
@@ -392,14 +357,6 @@ export function CreateMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             description={t("components.createMenu.personaSmartDesc")}
             color="from-purple-500 to-purple-600"
             onClick={() => void openGoalActions("persona")}
-          />
-
-          <MenuButton
-            icon={BookOpen}
-            title={t("components.createMenu.lorebook")}
-            description={t("components.createMenu.lorebookSmartDesc")}
-            color="from-amber-500 to-amber-600"
-            onClick={() => void openGoalActions("lorebook")}
           />
         </MenuSection>
       ) : mode === "ai-helper-actions" ? (
