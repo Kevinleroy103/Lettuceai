@@ -85,37 +85,129 @@ pub fn accumulate_image_data_urls_from_sse(raw: &str) -> Vec<String> {
 }
 
 pub fn accumulate_tool_calls_from_sse(raw: &str, provider_id: &str) -> Vec<ToolCall> {
-    let mut out: Vec<ToolCall> = Vec::new();
+    use std::collections::BTreeMap;
+
+    let mut by_index: BTreeMap<i64, ToolCall> = BTreeMap::new();
+    let mut arg_buffers: BTreeMap<i64, String> = BTreeMap::new();
+    let mut other: Vec<ToolCall> = Vec::new();
 
     for line in raw.lines() {
         let l = line.trim();
         if !l.starts_with("data:") {
             continue;
         }
-
         let payload = l[5..].trim();
         if payload.is_empty() || payload == "[DONE]" {
             continue;
         }
-
         let Ok(v) = serde_json::from_str::<Value>(payload) else {
             continue;
         };
 
-        let calls = parse_tool_calls(provider_id, &v);
-        for call in calls {
-            if let Some(existing) = out.iter_mut().find(|c| c.id == call.id) {
-                if let (Value::String(a), Value::String(b)) =
-                    (&mut existing.arguments, &call.arguments)
-                {
-                    a.push_str(b);
+        let mut handled_openai_stream = false;
+        if let Some(choices) = v.get("choices").and_then(Value::as_array) {
+            for choice in choices {
+                let Some(deltas) = choice
+                    .get("delta")
+                    .and_then(|d| d.get("tool_calls"))
+                    .and_then(Value::as_array)
+                else {
+                    continue;
+                };
+                handled_openai_stream = true;
+                for raw_call in deltas {
+                    let index = raw_call
+                        .get("index")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_else(|| (by_index.len() as i64) + 1000);
+                    let id_chunk = raw_call
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned);
+                    let name_chunk = raw_call
+                        .get("function")
+                        .and_then(|f| f.get("name"))
+                        .and_then(Value::as_str)
+                        .map(str::to_owned);
+                    let args_chunk = raw_call
+                        .get("function")
+                        .and_then(|f| f.get("arguments"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+
+                    let entry = by_index.entry(index).or_insert_with(|| ToolCall {
+                        id: String::new(),
+                        name: String::new(),
+                        arguments: Value::Null,
+                        raw_arguments: None,
+                    });
+                    if entry.id.is_empty() {
+                        if let Some(id) = id_chunk {
+                            entry.id = id;
+                        }
+                    }
+                    if entry.name.is_empty() {
+                        if let Some(name) = name_chunk {
+                            entry.name = name;
+                        }
+                    }
+                    arg_buffers
+                        .entry(index)
+                        .or_default()
+                        .push_str(args_chunk);
                 }
-            } else {
-                out.push(call);
             }
         }
+
+        if handled_openai_stream {
+            continue;
+        }
+
+        let calls = parse_tool_calls(provider_id, &v);
+        for call in calls {
+            if !call.id.is_empty() {
+                if let Some(existing) = other.iter_mut().find(|c| c.id == call.id) {
+                    if let (Value::String(a), Value::String(b)) =
+                        (&mut existing.arguments, &call.arguments)
+                    {
+                        a.push_str(b);
+                    }
+                    continue;
+                }
+            }
+            other.push(call);
+        }
     }
-    out
+
+    let mut out: Vec<ToolCall> = by_index.into_values().collect();
+    let buffers: Vec<(i64, String)> = arg_buffers.into_iter().collect();
+    for (i, call) in out.iter_mut().enumerate() {
+        let raw = buffers.get(i).map(|(_, s)| s.clone()).unwrap_or_default();
+        if !raw.is_empty() {
+            match serde_json::from_str::<Value>(&raw) {
+                Ok(parsed) => {
+                    call.arguments = parsed;
+                    call.raw_arguments = Some(raw);
+                }
+                Err(_) => {
+                    call.raw_arguments = Some(raw.clone());
+                    call.arguments = Value::String(raw);
+                }
+            }
+        } else if matches!(call.arguments, Value::Null) {
+            call.arguments = Value::Object(Default::default());
+        }
+        if call.id.is_empty() {
+            call.id = format!("tool_call_{}", i + 1);
+        }
+    }
+
+    if out.is_empty() {
+        other
+    } else {
+        out.extend(other);
+        out
+    }
 }
 
 pub fn usage_from_sse(raw: &str) -> Option<UsageSummary> {

@@ -36,7 +36,21 @@ pub struct CreationMessage {
     pub tool_calls: Vec<CreationToolCall>,
     #[serde(default)]
     pub tool_results: Vec<CreationToolResult>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocks: Vec<CreationBlock>,
     pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CreationBlock {
+    Text {
+        content: String,
+    },
+    Tool {
+        #[serde(rename = "toolCallId")]
+        tool_call_id: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

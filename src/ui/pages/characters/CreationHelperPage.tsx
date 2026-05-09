@@ -16,6 +16,7 @@ import {
 import { TopNav } from "../../components/App";
 import { cn, typography, animations, radius } from "../../design-tokens";
 import { BottomMenu, MenuButton, MenuSection } from "../../components";
+import { toast } from "../../components/toast";
 import { MarkdownRenderer } from "../chats/components/MarkdownRenderer";
 import { CharacterPreviewCard, PersonaPreviewCard } from "./components";
 import { CreationHelperFooter } from "./components/CreationHelperFooter";
@@ -30,8 +31,13 @@ interface CreationMessage {
   content: string;
   toolCalls: ToolCall[];
   toolResults: ToolResult[];
+  blocks?: CreationBlock[];
   createdAt: number;
 }
+
+type CreationBlock =
+  | { kind: "text"; content: string }
+  | { kind: "tool"; toolCallId: string };
 
 interface ToolCall {
   id: string;
@@ -201,12 +207,19 @@ function GeneratedImagePreview({
   sessionId: string;
   imageId: string;
   label: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const sizeClass = size === "lg" ? "h-72 w-72" : size === "sm" ? "h-36 w-36" : "h-40 w-40";
+  const sizeClass =
+    size === "xs"
+      ? "h-20 w-20"
+      : size === "lg"
+        ? "h-72 w-72"
+        : size === "sm"
+          ? "h-36 w-36"
+          : "h-40 w-40";
 
   useEffect(() => {
     let active = true;
@@ -242,7 +255,8 @@ function GeneratedImagePreview({
       <div
         className={cn(
           sizeClass,
-          "overflow-hidden rounded-2xl border border-fg/10 bg-fg/5 flex items-center justify-center",
+          "overflow-hidden rounded-lg border border-fg/10 bg-fg/5 flex items-center justify-center",
+          size === "lg" && "rounded-2xl",
         )}
       >
         {loading ? (
@@ -254,6 +268,26 @@ function GeneratedImagePreview({
         )}
       </div>
     </div>
+  );
+}
+
+
+function TypingIndicator() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-2"
+      aria-label="Assistant is typing"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-1">
+        <span className="typing-dot" />
+        <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+        <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
+      </div>
+    </motion.div>
   );
 }
 
@@ -300,9 +334,30 @@ export function CreationHelperPage() {
   const [, setStreamingReasoning] = useState<string>("");
   const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
   const [activeToolResults, setActiveToolResults] = useState<ToolResult[]>([]);
+  const [streamingSegments, setStreamingSegments] = useState<string[]>([]);
+  const [liveSteps, setLiveSteps] = useState<
+    Array<{
+      stepIndex: number;
+      name: string;
+      arguments: unknown;
+      status: "running" | "completed" | "failed";
+      result?: unknown;
+    }>
+  >([]);
+  const [liveBlocks, setLiveBlocks] = useState<
+    Array<
+      | { kind: "text"; content: string }
+      | { kind: "tool"; stepIndex: number }
+    >
+  >([]);
+  const liveBlocksRef = useRef(liveBlocks);
+  liveBlocksRef.current = liveBlocks;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamUnlistenRef = useRef<(() => void) | null>(null);
   const streamingContentRef = useRef<string>("");
+  const previewAutoOpenedRef = useRef<Set<number>>(new Set());
+  const previewDismissedRef = useRef<boolean>(false);
+  const streamingSegmentsRef = useRef<string[]>([]);
   const lastActionRef = useRef<"send" | "regenerate" | null>(null);
   const lastSendSnapshotRef = useRef<{
     draft: string;
@@ -313,6 +368,26 @@ export function CreationHelperPage() {
   const initGuardRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
   const [imageGenerations, setImageGenerations] = useState<ImageGenerationEntry[]>([]);
+
+  const resetStreamingTransient = useCallback(() => {
+    setStreamingContent("");
+    streamingContentRef.current = "";
+    setStreamingReasoning("");
+    setActiveTools([]);
+    setActiveToolResults([]);
+    setStreamingSegments([]);
+    streamingSegmentsRef.current = [];
+  }, []);
+
+  const flushStreamingSegment = useCallback(() => {
+    const buf = streamingContentRef.current;
+    if (buf.trim()) {
+      streamingSegmentsRef.current = [...streamingSegmentsRef.current, buf];
+      setStreamingSegments(streamingSegmentsRef.current);
+    }
+    streamingContentRef.current = "";
+    setStreamingContent("");
+  }, []);
 
   const resolveErrorMessage = useCallback((err: unknown, fallback: string) => {
     if (typeof err === "string") return err;
@@ -440,11 +515,7 @@ export function CreationHelperPage() {
     setMessageDisplayContent({});
     setSelectedTool(null);
     setShowToolDetail(false);
-    setStreamingContent("");
-    streamingContentRef.current = "";
-    setStreamingReasoning("");
-    setActiveTools([]);
-    setActiveToolResults([]);
+    resetStreamingTransient();
     lastActionRef.current = null;
     lastSendSnapshotRef.current = null;
     setImageGenerations([]);
@@ -456,7 +527,7 @@ export function CreationHelperPage() {
 
   useEffect(() => {
     if (activeTools.length === 0) return;
-    const generationCalls = activeTools.filter((call) => call.name === "generate_image");
+    const generationCalls = activeTools.filter((call) => isImageGenCall(call.name));
     if (generationCalls.length === 0) return;
     setImageGenerations((prev) => {
       const existingIds = new Set(prev.map((entry) => entry.toolCallId));
@@ -497,7 +568,7 @@ export function CreationHelperPage() {
         if (!message.toolResults?.length || !message.toolCalls?.length) continue;
         for (const result of message.toolResults) {
           const toolCall = message.toolCalls.find((call) => call.id === result.toolCallId);
-          if (!toolCall || toolCall.name !== "generate_image") continue;
+          if (!toolCall || !isImageGenCall(toolCall.name)) continue;
           const entryIndex = next.findIndex((entry) => entry.toolCallId === result.toolCallId);
           const resObj = result.result as { image_id?: string; imageId?: string };
           const imageId = resObj?.image_id ?? resObj?.imageId;
@@ -545,25 +616,6 @@ export function CreationHelperPage() {
         }
         if (Array.isArray(payload.activeToolResults)) {
           setActiveToolResults(payload.activeToolResults);
-          const wantsConfirmation = payload.activeToolResults.some((result) => {
-            const resObj = result.result as any;
-            return resObj?.action === "request_confirmation";
-          });
-          const wantsPreview = payload.activeToolResults.some((result) => {
-            const resObj = result.result as any;
-            return resObj?.action === "show_preview" || resObj?.action === "request_confirmation";
-          });
-          if (wantsPreview) {
-            setShowPreview(true);
-          }
-          if (wantsConfirmation) {
-            setShowConfirmation(true);
-          }
-        }
-
-        // Only UI state like preview:
-        if (payload.status === "previewShown") {
-          setShowPreview(true);
         }
       }
     });
@@ -572,6 +624,87 @@ export function CreationHelperPage() {
       unlisten.then((fn) => fn());
     };
   }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    const unlistenStart = listen<{ sessionId: string }>(
+      "creation-helper-turn-start",
+      (event) => {
+        if (event.payload?.sessionId === session.id) {
+          setLiveSteps([]);
+          setLiveBlocks([]);
+          liveBlocksRef.current = [];
+          previewAutoOpenedRef.current = new Set();
+        }
+      },
+    );
+    const unlistenStep = listen<{
+      sessionId: string;
+      stepIndex: number;
+      name: string;
+      arguments: unknown;
+      status: "running" | "completed" | "failed";
+      result?: unknown;
+    }>("creation-helper-step", (event) => {
+      const p = event.payload;
+      if (!p || p.sessionId !== session.id) return;
+      setLiveSteps((prev) => {
+        const idx = prev.findIndex((s) => s.stepIndex === p.stepIndex);
+        const next = idx >= 0 ? [...prev] : [...prev];
+        const entry = {
+          stepIndex: p.stepIndex,
+          name: p.name,
+          arguments: p.arguments,
+          status: p.status,
+          result: p.result,
+        };
+        if (idx >= 0) {
+          next[idx] = entry;
+        } else {
+          next.push(entry);
+          next.sort((a, b) => a.stepIndex - b.stepIndex);
+        }
+        return next;
+      });
+      if (p.status === "running") {
+        const buf = streamingContentRef.current.trim();
+        const blocks = [...liveBlocksRef.current];
+        if (buf) {
+          blocks.push({ kind: "text", content: buf });
+          streamingContentRef.current = "";
+          setStreamingContent("");
+        }
+        if (!blocks.some((b) => b.kind === "tool" && b.stepIndex === p.stepIndex)) {
+          blocks.push({ kind: "tool", stepIndex: p.stepIndex });
+        }
+        liveBlocksRef.current = blocks;
+        setLiveBlocks(blocks);
+      }
+      const resObj = p.result && typeof p.result === "object"
+        ? (p.result as Record<string, unknown>)
+        : null;
+      if (resObj?.action === "show_preview" || resObj?.action === "request_confirmation") {
+        const seen = previewAutoOpenedRef.current;
+        if (!seen.has(p.stepIndex) && !previewDismissedRef.current) {
+          seen.add(p.stepIndex);
+          setShowPreview(true);
+          if (resObj?.action === "request_confirmation") setShowConfirmation(true);
+        }
+      }
+    });
+    return () => {
+      unlistenStart.then((fn) => fn());
+      unlistenStep.then((fn) => fn());
+    };
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!sending && (liveSteps.length > 0 || liveBlocks.length > 0)) {
+      setLiveSteps([]);
+      setLiveBlocks([]);
+      liveBlocksRef.current = [];
+    }
+  }, [sending, liveSteps.length, liveBlocks.length]);
 
   useEffect(() => {
     return () => {
@@ -658,11 +791,7 @@ export function CreationHelperPage() {
 
     setSending(true);
     setError(null);
-    setStreamingContent("");
-    streamingContentRef.current = "";
-    setStreamingReasoning("");
-    setActiveTools([]);
-    setActiveToolResults([]);
+    resetStreamingTransient();
     lastActionRef.current = "send";
 
     const requestId = crypto.randomUUID();
@@ -711,6 +840,8 @@ export function CreationHelperPage() {
         if (payload.type === "delta" && payload.data?.text) {
           streamingContentRef.current += payload.data.text;
           setStreamingContent(streamingContentRef.current);
+        } else if (payload.type === "creationSegmentBoundary") {
+          flushStreamingSegment();
         } else if (payload.type === "reasoning" || payload.type === "thought") {
           if (payload.data?.text) {
             setStreamingReasoning((prev) => prev + payload.data.text);
@@ -732,11 +863,7 @@ export function CreationHelperPage() {
             "Streaming error. Please try again.",
           );
           setError(message);
-          setStreamingContent("");
-          streamingContentRef.current = "";
-          setStreamingReasoning("");
-          setActiveTools([]);
-          setActiveToolResults([]);
+          resetStreamingTransient();
           const snapshot = lastSendSnapshotRef.current;
           if (snapshot) {
             setInputValue((prev) => (prev.trim() ? prev : snapshot.draft));
@@ -769,20 +896,6 @@ export function CreationHelperPage() {
           }
         }
       }
-      if (lastMessage?.toolResults) {
-        for (const result of lastMessage.toolResults) {
-          const resObj = result.result as any;
-          if (resObj && typeof resObj === "object") {
-            const action = resObj.action;
-            if (action === "show_preview" || action === "request_confirmation") {
-              setShowPreview(true);
-              if (action === "request_confirmation") {
-                setShowConfirmation(true);
-              }
-            }
-          }
-        }
-      }
     } catch (err: any) {
       console.error("Failed to send message:", err);
       setError(resolveErrorMessage(err, "Failed to send message. Please try again."));
@@ -809,11 +922,7 @@ export function CreationHelperPage() {
         streamUnlistenRef.current = null;
       }
       setSending(false);
-      setStreamingContent("");
-      streamingContentRef.current = "";
-      setStreamingReasoning("");
-      setActiveTools([]);
-      setActiveToolResults([]);
+      resetStreamingTransient();
     }
   }, [session, inputValue, sending, references, pendingAttachments]);
 
@@ -842,11 +951,7 @@ export function CreationHelperPage() {
 
     setSending(true);
     setError(null);
-    setStreamingContent("");
-    streamingContentRef.current = "";
-    setStreamingReasoning("");
-    setActiveTools([]);
-    setActiveToolResults([]);
+    resetStreamingTransient();
     lastActionRef.current = "regenerate";
 
     const requestId = crypto.randomUUID();
@@ -874,6 +979,8 @@ export function CreationHelperPage() {
         if (payload.type === "delta" && payload.data?.text) {
           streamingContentRef.current += payload.data.text;
           setStreamingContent(streamingContentRef.current);
+        } else if (payload.type === "creationSegmentBoundary") {
+          flushStreamingSegment();
         } else if (payload.type === "reasoning" || payload.type === "thought") {
           if (payload.data?.text) {
             setStreamingReasoning((prev) => prev + payload.data.text);
@@ -895,11 +1002,7 @@ export function CreationHelperPage() {
             "Streaming error. Please try again.",
           );
           setError(message);
-          setStreamingContent("");
-          streamingContentRef.current = "";
-          setStreamingReasoning("");
-          setActiveTools([]);
-          setActiveToolResults([]);
+          resetStreamingTransient();
         }
       });
       streamUnlistenRef.current = unlistenStream;
@@ -918,20 +1021,6 @@ export function CreationHelperPage() {
           setError("Smart Creator failed to generate a response.");
         }
       }
-      if (lastMessage?.toolResults) {
-        for (const result of lastMessage.toolResults) {
-          const resObj = result.result as any;
-          if (resObj && typeof resObj === "object") {
-            const action = resObj.action;
-            if (action === "show_preview" || action === "request_confirmation") {
-              setShowPreview(true);
-              if (action === "request_confirmation") {
-                setShowConfirmation(true);
-              }
-            }
-          }
-        }
-      }
     } catch (err: any) {
       console.error("Failed to regenerate:", err);
       setError(resolveErrorMessage(err, "Failed to regenerate. Please try again."));
@@ -943,11 +1032,7 @@ export function CreationHelperPage() {
         streamUnlistenRef.current = null;
       }
       setSending(false);
-      setStreamingContent("");
-      streamingContentRef.current = "";
-      setStreamingReasoning("");
-      setActiveTools([]);
-      setActiveToolResults([]);
+      resetStreamingTransient();
     }
   }, [session, sending]);
 
@@ -984,6 +1069,21 @@ export function CreationHelperPage() {
     });
   }, [session, navigate]);
 
+  const handleSaveAndChat = useCallback(async () => {
+    if (!session) return;
+    try {
+      const draft = await invoke<DraftCharacter>("creation_helper_complete", {
+        sessionId: session.id,
+      });
+      navigate("/create/character", {
+        state: { draftCharacter: draft, autoSaveAndChat: true },
+      });
+    } catch (err: any) {
+      console.error("Failed to complete character:", err);
+      setError(resolveErrorMessage(err, "Failed to save character."));
+    }
+  }, [session, navigate, resolveErrorMessage]);
+
   const handleAbort = useCallback(() => {
     if (!session) return;
     if (streamUnlistenRef.current) {
@@ -993,10 +1093,7 @@ export function CreationHelperPage() {
     invoke("creation_helper_cancel", { sessionId: session.id })
       .then(() => {
         setSending(false);
-        setStreamingContent("");
-        streamingContentRef.current = "";
-        setStreamingReasoning("");
-        setActiveTools([]);
+        resetStreamingTransient();
         setError("Generation cancelled.");
       })
       .catch(console.error);
@@ -1011,16 +1108,37 @@ export function CreationHelperPage() {
       invoke("creation_helper_cancel", { sessionId: session.id }).catch(console.error);
     }
     setSending(false);
-    setStreamingContent("");
-    streamingContentRef.current = "";
-    setStreamingReasoning("");
-    setActiveTools([]);
+    resetStreamingTransient();
     navigate(-1);
   };
 
-  // Tool display helpers
   const getToolDisplayName = (toolName: string): string => {
     const names: Record<string, string> = {
+      write_definition: "Write definition",
+      write_scene: "Write scene",
+      write_lore_entry: "Write lorebook entry",
+      set_name: "Set name",
+      set_model: "Set model",
+      set_prompt: "Set prompt",
+      set_avatar_gradient: "Toggle avatar gradient",
+      attach_lorebooks: "Attach lorebooks",
+      edit_scene: "Edit scene",
+      edit_lore_entry: "Edit lorebook entry",
+      delete_scene: "Delete scene",
+      delete_lore_entry: "Delete lorebook entry",
+      delete_persona: "Delete persona",
+      delete_lorebook: "Delete lorebook",
+      reorder_lore_entries: "Reorder entries",
+      generate_image: "Generate image",
+      edit_avatar_image: "Edit image",
+      use_uploaded_image: "Use uploaded image",
+      show_preview: "Show preview",
+      request_confirmation: "Ready to save",
+      list_models: "Look up models",
+      list_prompts: "Look up prompts",
+      list_personas: "Look up personas",
+      list_lorebooks: "Look up lorebooks",
+      list_lore_entries: "Look up entries",
       set_character_name: "Set name",
       set_character_definition: "Set definition",
       set_character_description: "Set definition",
@@ -1031,17 +1149,11 @@ export function CreationHelperPage() {
       set_system_prompt: "Set prompt",
       use_uploaded_image_as_avatar: "Set avatar",
       use_uploaded_image_as_chat_background: "Set background",
-      show_preview: "Show preview",
-      request_confirmation: "Ready to save",
       generate_avatar: "Generate avatar",
-      list_personas: "List personas",
       upsert_persona: "Save persona",
       use_uploaded_image_as_persona_avatar: "Set persona avatar",
-      delete_persona: "Delete persona",
       get_default_persona: "Get default persona",
-      list_lorebooks: "List lorebooks",
       upsert_lorebook: "Save lorebook",
-      delete_lorebook: "Delete lorebook",
       list_lorebook_entries: "List lorebook entries",
       get_lorebook_entry: "Get lorebook entry",
       upsert_lorebook_entry: "Save lorebook entry",
@@ -1050,27 +1162,12 @@ export function CreationHelperPage() {
       reorder_lorebook_entries: "Reorder lorebook entries",
       list_character_lorebooks: "List character lorebooks",
       set_character_lorebooks: "Set character lorebooks",
-      generate_image: "Generate image",
     };
     return names[toolName] || toolName;
   };
 
-  // Thinking indicator component
-  const TypingIndicator = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-2"
-      aria-label="Assistant is typing"
-      aria-live="polite"
-    >
-      <div className="flex items-center gap-1">
-        <span className="typing-dot" />
-        <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
-        <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
-      </div>
-    </motion.div>
-  );
+  const isImageGenCall = (name: string | undefined) =>
+    name === "generate_image" || name === "edit_avatar_image";
 
   const displayMessages = (() => {
     if (!session) return [];
@@ -1083,29 +1180,58 @@ export function CreationHelperPage() {
         (lastMessage.toolCalls?.length ?? 0) > 0 ||
         (lastMessage.toolResults?.length ?? 0) > 0);
     const hasTransientAssistantState =
-      !!streamingContent.trim() || activeTools.length > 0 || activeToolResults.length > 0;
+      !!streamingContent.trim() ||
+      streamingSegments.length > 0 ||
+      liveSteps.length > 0 ||
+      liveBlocks.length > 0 ||
+      activeTools.length > 0 ||
+      activeToolResults.length > 0;
 
-    if (sending && !hasCommittedAssistantTail && hasTransientAssistantState) {
+    if (sending && !hasCommittedAssistantTail && !hasTransientAssistantState) {
       msgs.push({
-        id: "__streaming__",
+        id: "__placeholder__",
         role: "assistant",
-        content: streamingContent || "",
-        toolCalls: activeTools,
-        toolResults: activeToolResults,
+        content: "",
+        toolCalls: [],
+        toolResults: [],
         createdAt: Date.now(),
       });
     }
 
-    if (imageGenerations.length > 0) {
-      const imageMessages = imageGenerations.map((entry) => ({
-        id: entry.id,
-        role: "system" as const,
-        content: "",
-        toolCalls: [],
-        toolResults: [],
-        createdAt: entry.createdAt,
+    if (sending && !hasCommittedAssistantTail && hasTransientAssistantState) {
+      const stepById = new Map(liveSteps.map((s) => [s.stepIndex, s]));
+      const liveCalls = liveSteps.map((s) => ({
+        id: `__live_${s.stepIndex}`,
+        name: s.name,
+        arguments: s.arguments,
       }));
-      msgs.push(...imageMessages);
+      const liveResults = liveSteps
+        .filter((s) => s.status !== "running")
+        .map((s) => ({
+          toolCallId: `__live_${s.stepIndex}`,
+          result: s.result ?? {},
+          success: s.status === "completed",
+        }));
+      const blocks: CreationBlock[] = liveBlocks.map((b) => {
+        if (b.kind === "text") return { kind: "text", content: b.content };
+        const step = stepById.get(b.stepIndex);
+        return {
+          kind: "tool",
+          toolCallId: step ? `__live_${step.stepIndex}` : `__live_unknown_${b.stepIndex}`,
+        };
+      });
+      if (streamingContent.trim()) {
+        blocks.push({ kind: "text", content: streamingContent });
+      }
+      msgs.push({
+        id: "__streaming__",
+        role: "assistant",
+        content: streamingContent || "",
+        toolCalls: liveCalls.length > 0 ? liveCalls : activeTools,
+        toolResults: liveResults.length > 0 ? liveResults : activeToolResults,
+        blocks: blocks.length > 0 ? blocks : undefined,
+        createdAt: Date.now(),
+      });
     }
 
     const indexed = msgs.map((msg, index) => ({ msg, index }));
@@ -1171,13 +1297,11 @@ export function CreationHelperPage() {
       : "Character Preview";
 
   const handleOpenPersona = useCallback(async () => {
-    const personaId =
-      session?.creationMode === "edit" && session?.targetType === "persona"
-        ? session.targetId
-        : previewPersona?.id;
-    if (!personaId) return;
+    if (!session) return;
 
-    if (session?.creationMode === "edit" && session?.targetType === "persona") {
+    if (session.creationMode === "edit" && session.targetType === "persona") {
+      const personaId = session.targetId;
+      if (!personaId) return;
       try {
         await invoke("creation_helper_complete", {
           sessionId: session.id,
@@ -1187,16 +1311,24 @@ export function CreationHelperPage() {
         setError(resolveErrorMessage(err, "Failed to save persona changes."));
         return;
       }
+      navigate(`/personas/${personaId}/edit`);
+      return;
     }
 
-    navigate(`/personas/${personaId}/edit`);
+    try {
+      const draft = await invoke<DraftCharacter>("creation_helper_complete", {
+        sessionId: session.id,
+      });
+      navigate("/create/persona", {
+        state: { draftPersona: draft },
+      });
+    } catch (err) {
+      console.error("Failed to complete persona:", err);
+      setError(resolveErrorMessage(err, "Failed to save persona."));
+    }
   }, [
     navigate,
-    previewPersona?.id,
-    session?.creationMode,
-    session?.id,
-    session?.targetId,
-    session?.targetType,
+    session,
     resolveErrorMessage,
   ]);
 
@@ -1212,6 +1344,7 @@ export function CreationHelperPage() {
               onClick={() => {
                 setShowConfirmation(false);
                 setShowPreview(true);
+                previewDismissedRef.current = false;
               }}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
@@ -1259,7 +1392,7 @@ export function CreationHelperPage() {
           )}
 
           {/* Messages */}
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence initial={false}>
             {displayMessages.map((message) => {
               const imageEntry = imageGenerationLookup.get(message.id);
               const isUser = message.role === "user";
@@ -1271,12 +1404,15 @@ export function CreationHelperPage() {
                   : isUser
                     ? "justify-end"
                     : "justify-start";
+              const isLiveBubble =
+                message.id === "__streaming__" || message.id === "__placeholder__";
               return (
                 <motion.div
                   key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={isLiveBubble ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
                   className={cn("flex", alignClass)}
                 >
                   <div
@@ -1293,13 +1429,13 @@ export function CreationHelperPage() {
                       <div className="flex flex-col items-center gap-2">
                         {imageEntry.status === "pending" ? (
                           <>
-                            <div className="h-36 w-36 rounded-2xl border border-fg/10 bg-fg/5 flex items-center justify-center">
+                            <div className="h-36 w-36 rounded-lg border border-fg/10 bg-fg/5 flex items-center justify-center">
                               <Loader2 className="h-6 w-6 animate-spin text-fg/40" />
                             </div>
                           </>
                         ) : imageEntry.status === "error" ? (
                           <>
-                            <div className="h-36 w-36 rounded-2xl border border-danger/30 bg-danger/10 flex items-center justify-center">
+                            <div className="h-36 w-36 rounded-lg border border-danger/30 bg-danger/10 flex items-center justify-center">
                               <span className="text-xs text-danger">Generation failed</span>
                             </div>
                           </>
@@ -1328,34 +1464,178 @@ export function CreationHelperPage() {
                       </div>
                     ) : (
                       <>
-                        {/* Message Content */}
-                        {(() => {
-                          let displayText = message.content;
+                        {message.blocks && message.blocks.length > 0 ? (
+                          <div className="space-y-2">
+                            {(() => {
+                              const elements: React.ReactNode[] = [];
+                              const blocks = message.blocks!;
+                              let i = 0;
+                              while (i < blocks.length) {
+                                const b = blocks[i];
+                                if (b.kind === "text") {
+                                  elements.push(
+                                    <MarkdownRenderer
+                                      key={`b-${i}`}
+                                      content={b.content}
+                                      className={cn(
+                                        "text-sm leading-relaxed",
+                                        message.role === "user" ? "text-fg" : "text-fg/90",
+                                      )}
+                                    />,
+                                  );
+                                  i++;
+                                  continue;
+                                }
+                                const pillRow: React.ReactNode[] = [];
+                                while (i < blocks.length && blocks[i].kind === "tool") {
+                                  const tb = blocks[i] as { kind: "tool"; toolCallId: string };
+                                  const call = (message.toolCalls || []).find(
+                                    (c) => c.id === tb.toolCallId,
+                                  );
+                                  const result = (message.toolResults || []).find(
+                                    (r) => r.toolCallId === tb.toolCallId,
+                                  );
+                                  i++;
+                                  if (!call) continue;
+                                  const displayName = getToolDisplayName(
+                                    call.name || "Unknown Tool",
+                                  );
+                                  const isPending = !result;
+                                  pillRow.push(
+                                    <button
+                                      key={`p-${i}-${call.id}`}
+                                      onClick={() => {
+                                        if (!result) return;
+                                        setSelectedTool({ call, result });
+                                        setShowToolDetail(true);
+                                      }}
+                                      disabled={isPending}
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 text-[11px] rounded-full px-2 py-0.5 transition-colors",
+                                        isPending
+                                          ? "bg-fg/5 text-fg/60 border border-fg/10"
+                                          : result.success
+                                            ? "bg-accent/10 text-accent/80 hover:bg-accent/20"
+                                            : "bg-danger/10 text-danger hover:bg-danger/20",
+                                      )}
+                                    >
+                                      {isPending ? (
+                                        <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                                      ) : result.success ? (
+                                        <Check className="h-3 w-3 shrink-0" />
+                                      ) : (
+                                        <span className="h-3 w-3 shrink-0 leading-none">✗</span>
+                                      )}
+                                      <span className="truncate">{displayName}</span>
+                                    </button>,
+                                  );
+                                }
+                                if (pillRow.length > 0) {
+                                  elements.push(
+                                    <div
+                                      key={`pr-${i}`}
+                                      className="flex flex-wrap gap-1.5"
+                                    >
+                                      {pillRow}
+                                    </div>,
+                                  );
+                                  const rowEndIndex = i;
+                                  const rowStartIndex = (() => {
+                                    let s = i - 1;
+                                    while (s >= 0 && blocks[s].kind === "tool") s--;
+                                    return s + 1;
+                                  })();
+                                  const rowImages: { id: string; label: string }[] = [];
+                                  for (let j = rowStartIndex; j < rowEndIndex; j++) {
+                                    const tb = blocks[j];
+                                    if (tb.kind !== "tool") continue;
+                                    const call = (message.toolCalls || []).find(
+                                      (c) => c.id === tb.toolCallId,
+                                    );
+                                    if (!call || !isImageGenCall(call.name)) continue;
+                                    const result = (message.toolResults || []).find(
+                                      (r) => r.toolCallId === tb.toolCallId,
+                                    );
+                                    const resObj = result?.result as
+                                      | { image_id?: string; imageId?: string }
+                                      | undefined;
+                                    const imgId = resObj?.image_id ?? resObj?.imageId;
+                                    if (imgId) {
+                                      rowImages.push({
+                                        id: imgId,
+                                        label: getToolDisplayName(call.name),
+                                      });
+                                    }
+                                  }
+                                  if (rowImages.length > 0 && session?.id) {
+                                    elements.push(
+                                      <div
+                                        key={`pi-${i}`}
+                                        className="flex flex-wrap gap-1.5 -mt-0.5"
+                                      >
+                                        {rowImages.map((img) => (
+                                          <button
+                                            key={img.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setImagePreview({ id: img.id, label: img.label })
+                                            }
+                                            className="rounded-lg overflow-hidden border border-fg/10 hover:border-fg/25 transition-colors"
+                                            aria-label={img.label}
+                                          >
+                                            <GeneratedImagePreview
+                                              sessionId={session.id}
+                                              imageId={img.id}
+                                              label={img.label}
+                                              size="xs"
+                                            />
+                                          </button>
+                                        ))}
+                                      </div>,
+                                    );
+                                  }
+                                }
+                              }
+                              if (message.id === "__streaming__") {
+                                elements.push(
+                                  <TypingIndicator key="trailing-dots" />,
+                                );
+                              }
+                              return elements;
+                            })()}
+                          </div>
+                        ) : (
+                          (() => {
+                            let displayText = message.content;
 
-                          if (messageDisplayContent[message.id]) {
-                            displayText = messageDisplayContent[message.id];
-                          } else {
-                            const separator = "\n\n---\n";
-                            const sepIndex = displayText.indexOf(separator);
-                            if (sepIndex !== -1) {
-                              displayText = displayText.substring(0, sepIndex).trim();
+                            if (messageDisplayContent[message.id]) {
+                              displayText = messageDisplayContent[message.id];
+                            } else {
+                              const separator = "\n\n---\n";
+                              const sepIndex = displayText.indexOf(separator);
+                              if (sepIndex !== -1) {
+                                displayText = displayText.substring(0, sepIndex).trim();
+                              }
                             }
-                          }
 
-                          if (message.id === "__streaming__" && !displayText.trim()) {
-                            return <TypingIndicator />;
-                          }
+                            if (
+                              (message.id === "__streaming__" || message.id === "__placeholder__") &&
+                              !displayText.trim()
+                            ) {
+                              return <TypingIndicator />;
+                            }
 
-                          return (
-                            <MarkdownRenderer
-                              content={displayText}
-                              className={cn(
-                                "text-sm leading-relaxed",
-                                message.role === "user" ? "text-fg" : "text-fg/90",
-                              )}
-                            />
-                          );
-                        })()}
+                            return (
+                              <MarkdownRenderer
+                                content={displayText}
+                                className={cn(
+                                  "text-sm leading-relaxed",
+                                  message.role === "user" ? "text-fg" : "text-fg/90",
+                                )}
+                              />
+                            );
+                          })()
+                        )}
 
                         {/* References & Attachments Display */}
                         {(() => {
@@ -1424,81 +1704,6 @@ export function CreationHelperPage() {
                           );
                         })()}
 
-                        {/* Tool Calls Display */}
-                        {(() => {
-                          const toolResults = message.toolResults || [];
-                          const toolCalls = message.toolCalls || [];
-                          const toolResultsById = new Map(
-                            toolResults.map((result) => [result.toolCallId, result]),
-                          );
-                          const toolCallIds = new Set(toolCalls.map((call) => call.id));
-                          const toolEntries = toolCalls.map((call) => ({
-                            call,
-                            result: toolResultsById.get(call.id),
-                          }));
-                          for (const result of toolResults) {
-                            if (!toolCallIds.has(result.toolCallId)) {
-                              toolEntries.push({
-                                call: {
-                                  id: result.toolCallId,
-                                  name: "Unknown Tool",
-                                  arguments: {},
-                                },
-                                result,
-                              });
-                            }
-                          }
-
-                          if (toolEntries.length === 0) return null;
-
-                          return (
-                            <div className="mt-3 space-y-1.5 border-t border-fg/10 pt-3">
-                              {toolEntries.map(({ call, result }) => {
-                                const displayName = getToolDisplayName(call.name || "Unknown Tool");
-                                if (!result) {
-                                  return (
-                                    <div
-                                      key={call.id}
-                                      className={cn(
-                                        "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 text-left",
-                                        "bg-fg/5 text-fg/60 border border-fg/10",
-                                      )}
-                                    >
-                                      <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-                                      <span className="truncate flex-1">{displayName}</span>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <button
-                                    key={call.id}
-                                    onClick={() => {
-                                      setSelectedTool({ call, result });
-                                      setShowToolDetail(true);
-                                    }}
-                                    className={cn(
-                                      "w-full flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition-all text-left group",
-                                      result.success
-                                        ? "bg-accent/10 text-accent/80 hover:bg-accent/20"
-                                        : "bg-danger/10 text-danger hover:bg-danger/20",
-                                    )}
-                                  >
-                                    {result.success ? (
-                                      <Check className="h-3 w-3 shrink-0" />
-                                    ) : (
-                                      <span className="h-3 w-3 shrink-0">✗</span>
-                                    )}
-                                    <span className="truncate flex-1">{displayName}</span>
-                                    <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                      View Details
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
                       </>
                     )}
                   </div>
@@ -1588,6 +1793,7 @@ export function CreationHelperPage() {
         onClose={() => {
           setShowPreview(false);
           setShowConfirmation(false);
+          previewDismissedRef.current = true;
         }}
         title={previewTitle}
       >
@@ -1604,37 +1810,41 @@ export function CreationHelperPage() {
             />
 
             <MenuSection>
-              <MenuButton
-                icon={Check}
-                title={
-                  session.creationMode === "edit" && session.targetType === "character"
-                    ? "Save Character Changes"
-                    : "Use This Character"
-                }
-                description={
-                  session.creationMode === "edit" && session.targetType === "character"
-                    ? "Apply updates to existing character"
-                    : "Save and start chatting"
-                }
-                color="from-accent to-accent/80"
-                onClick={handleUseCharacter}
-              />
+              {session.creationMode === "edit" && session.targetType === "character" ? (
+                <MenuButton
+                  icon={Check}
+                  title="Save Character Changes"
+                  description="Apply updates to existing character"
+                  color="from-accent to-accent/80"
+                  onClick={handleUseCharacter}
+                />
+              ) : (
+                <>
+                  <MenuButton
+                    icon={Check}
+                    title="Save & Chat"
+                    description="Commit the character and open a chat"
+                    color="from-accent to-accent/80"
+                    onClick={handleSaveAndChat}
+                  />
+                  <MenuButton
+                    icon={PenLine}
+                    title="Open in Editor"
+                    description="Review fields before saving"
+                    color="from-warning to-warning/80"
+                    onClick={handleEditManually}
+                  />
+                </>
+              )}
               <MenuButton
                 icon={RefreshCw}
-                title="Keep Editing"
-                description="Continue the conversation"
+                title="Keep Editing Here"
+                description="Return to the conversation"
                 color="from-info to-info/80"
                 onClick={() => {
                   setShowPreview(false);
                   setShowConfirmation(false);
                 }}
-              />
-              <MenuButton
-                icon={PenLine}
-                title="Edit Manually"
-                description="Fine-tune in the editor"
-                color="from-warning to-warning/80"
-                onClick={handleEditManually}
               />
             </MenuSection>
           </div>
@@ -1658,21 +1868,20 @@ export function CreationHelperPage() {
                 title={
                   session?.creationMode === "edit" && session?.targetType === "persona"
                     ? "Save Persona Changes"
-                    : "Open Persona"
+                    : "Use Persona"
                 }
                 description={
                   session?.creationMode === "edit" && session?.targetType === "persona"
                     ? "Apply updates to existing persona"
-                    : previewPersona?.id
-                      ? "Review and edit your persona"
-                      : "Create a persona first"
+                    : "Review and save on the create page"
                 }
                 color="from-accent to-accent/80"
                 onClick={handleOpenPersona}
                 disabled={
                   session?.creationMode === "edit" && session?.targetType === "persona"
                     ? !session?.targetId
-                    : !previewPersona?.id
+                    : !(session?.draft?.name?.trim() || session?.draft?.description?.trim() ||
+                        session?.draft?.definition?.trim())
                 }
               />
               <MenuButton
@@ -1762,13 +1971,28 @@ export function CreationHelperPage() {
         title={imagePreview?.label ?? "Generated Image"}
       >
         {imagePreview && session?.id && (
-          <div className="flex justify-center py-6">
+          <div className="flex flex-col items-center gap-2 py-6">
             <GeneratedImagePreview
               sessionId={session.id}
               imageId={imagePreview.id}
               label={imagePreview.label}
               size="lg"
             />
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(imagePreview.id);
+                  toast.success("Image id copied");
+                } catch {
+                  toast.error("Failed to copy");
+                }
+              }}
+              className="rounded-md bg-white/10 px-3 py-1.5 font-mono text-sm text-white/90 text-center hover:bg-white/15 transition-colors cursor-pointer"
+            >
+              <span className="text-white/60 select-none">Id:</span>{" "}
+              <span className="select-all">{imagePreview.id}</span>
+            </button>
           </div>
         )}
       </BottomMenu>

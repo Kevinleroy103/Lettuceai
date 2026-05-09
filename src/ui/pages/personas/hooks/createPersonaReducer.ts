@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { savePersona } from "../../../../core/storage/repo";
 import { saveAvatar } from "../../../../core/storage/avatars";
@@ -125,6 +125,29 @@ export function useCreatePersonaController() {
   const location = useLocation();
   const { t } = useI18n();
   const [state, dispatch] = useReducer(createPersonaReducer, initialCreatePersonaState);
+
+  const hydratedFromDraftRef = useRef(false);
+  useEffect(() => {
+    if (hydratedFromDraftRef.current) return;
+    const draft = (location.state as { draftPersona?: unknown } | null)?.draftPersona as
+      | {
+          name?: string | null;
+          description?: string | null;
+          definition?: string | null;
+          avatarPath?: string | null;
+        }
+      | undefined;
+    if (!draft) return;
+    hydratedFromDraftRef.current = true;
+    dispatch({
+      type: "hydrate_from_import",
+      payload: {
+        title: draft.name ?? "",
+        description: (draft.description ?? draft.definition ?? "").toString(),
+        avatarPath: draft.avatarPath ?? null,
+      },
+    });
+  }, [location.state]);
 
   const canSave = useMemo(
     () => state.title.trim().length > 0 && state.description.trim().length > 0 && !state.saving,

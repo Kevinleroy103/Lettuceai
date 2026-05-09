@@ -26,6 +26,7 @@ import {
   buildCharacterCreateLibraryReturnKey,
   type BackgroundLibrarySelectionPayload,
 } from "../../components/AvatarPicker/librarySelection";
+import { listCharacters, createSession } from "../../../core/storage/repo";
 
 const CREATE_CHARACTER_DRAFT_KEY = "create-character-draft";
 const MAX_DRAFT_INLINE_IMAGE_LENGTH = 200_000;
@@ -335,14 +336,47 @@ export function CreateCharacterPage() {
     }
   };
 
-  const handleSave = async () => {
+  const autoSaveAndChat = Boolean(
+    (location.state as { autoSaveAndChat?: boolean } | null)?.autoSaveAndChat,
+  );
+  const autoSaveTriggeredRef = React.useRef(false);
+
+  const handleSave = async (options?: { thenChat?: boolean }) => {
     const success = await actions.handleSave();
     if (success) {
       sessionStorage.removeItem(CREATE_CHARACTER_DRAFT_KEY);
       sessionStorage.removeItem(buildCharacterCreateLibraryReturnKey(returnPath));
+      if (options?.thenChat) {
+        try {
+          const characters = await listCharacters();
+          const target = [...characters]
+            .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+            .find((c) => c.name?.trim() === state.name.trim());
+          if (target) {
+            const newSession = await createSession(
+              target.id,
+              `Chat with ${target.name}`,
+            );
+            navigate(`/chat/${target.id}?sessionId=${newSession.id}`);
+            return success;
+          }
+        } catch (err) {
+          console.warn("[CreateCharacter] Save & Chat: lookup failed:", err);
+        }
+      }
       navigate("/chat");
     }
+    return success;
   };
+
+  React.useEffect(() => {
+    if (!autoSaveAndChat) return;
+    if (autoSaveTriggeredRef.current) return;
+    if (!state.name.trim() || !state.definition.trim()) return;
+    autoSaveTriggeredRef.current = true;
+    void handleSave({ thenChat: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSaveAndChat, state.name, state.definition]);
 
   //const stepLabel =
   //  state.step === Step.Identity ? "Identity" :

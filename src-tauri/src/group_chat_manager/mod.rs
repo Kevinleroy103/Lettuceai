@@ -6730,7 +6730,7 @@ pub async fn group_chat_regenerate(
             Ok(selection) => Ok((selection.character_id, selection.reasoning, false)),
             Err(err) => {
                 if is_request_abort_error(&err) {
-                    return Err(err);
+                    return Err(err.to_string());
                 }
                 log_error(
                     &app,
@@ -6965,7 +6965,7 @@ pub async fn group_chat_continue(
                     Ok(selection) => Ok((selection.character_id, selection.reasoning, false)),
                     Err(err) => {
                         if is_request_abort_error(&err) {
-                            return Err(err);
+                            return Err(err.to_string());
                         }
                         log_error(
                             &app,
