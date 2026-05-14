@@ -1165,6 +1165,22 @@ function MessageRow({
   }, [hits]);
   const segments = useMemo(() => segmentText(displayContent, hits), [displayContent, hits]);
   const role = roleMeta(message.role, t);
+  const uniqueHitMatches = useMemo(() => {
+    const seen = new Set<string>();
+    const unique: MessageMatch[] = [];
+    for (const h of hits) {
+      const key = `${h.match.entryId}::${h.match.keyword}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(h.match);
+    }
+    return unique;
+  }, [hits]);
+
+  const openMatchesAtElementCenter = (element: HTMLElement, matches: MessageMatch[]) => {
+    const rect = element.getBoundingClientRect();
+    onKeywordContextMenu(rect.left + rect.width / 2, rect.top + rect.height / 2, matches);
+  };
 
   return (
     <div className="py-3">
@@ -1176,17 +1192,12 @@ function MessageRow({
         {hits.length > 0 && (
           <button
             type="button"
+            onClick={(e) => {
+              openMatchesAtElementCenter(e.currentTarget, uniqueHitMatches);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
-              const seen = new Set<string>();
-              const unique: MessageMatch[] = [];
-              for (const h of hits) {
-                const key = `${h.match.entryId}::${h.match.keyword}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                unique.push(h.match);
-              }
-              onKeywordContextMenu(e.clientX, e.clientY, unique);
+              onKeywordContextMenu(e.clientX, e.clientY, uniqueHitMatches);
             }}
             onTouchStart={(e) => {
               const touch = e.touches[0];
@@ -1195,15 +1206,7 @@ function MessageRow({
               const startY = touch.clientY;
               const target = e.currentTarget;
               const timer = window.setTimeout(() => {
-                const seen = new Set<string>();
-                const unique: MessageMatch[] = [];
-                for (const h of hits) {
-                  const key = `${h.match.entryId}::${h.match.keyword}`;
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  unique.push(h.match);
-                }
-                onKeywordContextMenu(startX, startY, unique);
+                onKeywordContextMenu(startX, startY, uniqueHitMatches);
               }, 450);
               const cancel = () => {
                 window.clearTimeout(timer);
@@ -1221,7 +1224,7 @@ function MessageRow({
               target.addEventListener("touchmove", onMove);
             }}
             style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-            className="cursor-context-menu rounded-full bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent/90 ring-1 ring-accent/30 transition hover:bg-accent/25"
+            className="cursor-pointer rounded-full bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent/90 ring-1 ring-accent/30 transition hover:bg-accent/25"
           >
             {t("characters.lorebook.preview.matchCount", {
               hits: hits.length,
@@ -1243,6 +1246,16 @@ function MessageRow({
             ) : (
               <span
                 key={idx}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  openMatchesAtElementCenter(e.currentTarget, seg.matches);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  openMatchesAtElementCenter(e.currentTarget, seg.matches);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   onKeywordContextMenu(e.clientX, e.clientY, seg.matches);
@@ -1272,7 +1285,7 @@ function MessageRow({
                   target.addEventListener("touchmove", onMove);
                 }}
                 style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-                className="cursor-context-menu rounded-[3px] bg-accent/20 px-0.5 text-accent/95 ring-1 ring-accent/30 transition hover:bg-accent/30"
+                className="cursor-pointer rounded-[3px] bg-accent/20 px-0.5 text-accent/95 ring-1 ring-accent/30 outline-none transition hover:bg-accent/30 focus-visible:bg-accent/30"
                 title={seg.matches.map((m) => `${m.entryTitle} · ${m.keyword}`).join("\n")}
               >
                 {seg.text}
