@@ -17,7 +17,10 @@ import {
   Image,
   Plus,
   X,
+  ListFilter,
+  Check,
 } from "lucide-react";
+import { getPromptTypeName } from "./EditPromptTemplate";
 import { cn, typography, radius, interactive } from "../../design-tokens";
 import { useI18n } from "../../../core/i18n/context";
 import {
@@ -59,13 +62,24 @@ type TemplateUsage = {
   characters: number;
 };
 
-type FilterTag = "all" | "system" | "internal" | "custom";
-
-const FILTER_TAGS: { key: FilterTag; labelKey: string }[] = [
-  { key: "all", labelKey: "systemPrompts.filters.all" },
-  { key: "system", labelKey: "systemPrompts.filters.system" },
-  { key: "internal", labelKey: "systemPrompts.filters.internal" },
-  { key: "custom", labelKey: "systemPrompts.filters.custom" },
+const ALL_PROMPT_TYPES: PromptTemplateType[] = [
+  "directChat",
+  "companionChat",
+  "groupChatRoleplay",
+  "groupChatConversational",
+  "replyHelperRoleplay",
+  "replyHelperConversational",
+  "dynamicMemorySummarizer",
+  "dynamicMemoryManager",
+  "lorebookEntryWriter",
+  "lorebookKeywordGenerator",
+  "avatarGeneration",
+  "avatarEditRequest",
+  "sceneGeneration",
+  "scenePromptWriter",
+  "designReferenceWriter",
+  "companionSoulWriter",
+  "undefined",
 ];
 
 type ExternalPromptEntry = {
@@ -664,14 +678,14 @@ function PromptCard({
 }
 
 export function SystemPromptsPage() {
-  const { t } = useI18n();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<SystemPromptTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDefaultId, setActiveDefaultId] = useState<string>(APP_DEFAULT_TEMPLATE_ID);
   const [usageById, setUsageById] = useState<Record<string, TemplateUsage>>({});
   const [search, setSearch] = useState("");
-  const [activeTag, setActiveTag] = useState<FilterTag>("all");
+  const [selectedTypes, setSelectedTypes] = useState<Set<PromptTemplateType>>(new Set());
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<SystemPromptTemplate | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -952,12 +966,7 @@ export function SystemPromptsPage() {
 
   const filtered = useMemo(() => {
     return templates.filter((t) => {
-      const isProtected = isProtectedPromptTemplate(t.id);
-      const isSystem = isSystemPromptTemplate(t.id);
-
-      if (activeTag === "system" && !isSystem) return false;
-      if (activeTag === "internal" && isSystem) return false;
-      if (activeTag === "custom" && isProtected) return false;
+      if (selectedTypes.size > 0 && !selectedTypes.has(t.promptType)) return false;
 
       const q = search.trim().toLowerCase();
       if (!q) return true;
@@ -965,23 +974,22 @@ export function SystemPromptsPage() {
         t.name.toLowerCase().includes(q) || getTemplatePreviewText(t).toLowerCase().includes(q)
       );
     });
-  }, [templates, activeTag, search]);
+  }, [templates, selectedTypes, search]);
 
   return (
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-y-auto px-4 pt-4 pb-6">
         <div className="mx-auto w-full max-w-5xl space-y-4">
           {/* Search and Filters */}
-          <div className="flex flex-col gap-3">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/30 pointer-events-none" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative sm:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg/30" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search prompts..."
                 className={cn(
-                  "w-full pl-10 pr-10 py-2.5",
+                  "w-full py-2.5 pl-10 pr-10",
                   radius.lg,
                   "border border-fg/10 bg-fg/5",
                   "text-sm text-fg placeholder-fg/30",
@@ -999,7 +1007,7 @@ export function SystemPromptsPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 sm:shrink-0">
               <input
                 ref={importInputRef}
                 type="file"
@@ -1013,11 +1021,31 @@ export function SystemPromptsPage() {
                 }}
               />
               <button
+                onClick={() => setTypeFilterOpen(true)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2.5",
+                  radius.lg,
+                  "text-xs font-medium",
+                  interactive.transition.fast,
+                  selectedTypes.size > 0
+                    ? "border border-accent/40 bg-accent/15 text-accent/80"
+                    : "border border-fg/10 bg-fg/5 text-fg/50 hover:bg-fg/10 hover:text-fg/70",
+                )}
+              >
+                <ListFilter className="h-3.5 w-3.5" />
+                <span>Type</span>
+                {selectedTypes.size > 0 && (
+                  <span className="rounded-full bg-accent/25 px-1.5 text-[10px] font-semibold tabular-nums">
+                    {selectedTypes.size}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => importInputRef.current?.click()}
                 disabled={importing}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-2",
-                  radius.md,
+                  "flex items-center gap-2 px-3 py-2.5",
+                  radius.lg,
                   "border border-fg/10 bg-fg/5",
                   "text-xs font-medium text-fg/70",
                   interactive.transition.fast,
@@ -1028,26 +1056,6 @@ export function SystemPromptsPage() {
                 <Upload className="h-3.5 w-3.5" />
                 {importing ? "Importing..." : "Import"}
               </button>
-              {FILTER_TAGS.map((tag) => {
-                const isActive = activeTag === tag.key;
-                return (
-                  <button
-                    key={tag.key}
-                    onClick={() => setActiveTag(tag.key)}
-                    className={cn(
-                      "px-3 py-1.5 shrink-0",
-                      radius.md,
-                      "text-xs font-medium",
-                      interactive.transition.fast,
-                      isActive
-                        ? "border border-accent/40 bg-accent/15 text-accent/80"
-                        : "border border-fg/10 bg-fg/5 text-fg/50 hover:bg-fg/10 hover:text-fg/70",
-                    )}
-                  >
-                    {t(tag.labelKey as any)}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
@@ -1055,7 +1063,7 @@ export function SystemPromptsPage() {
           {loading ? (
             <PromptCardSkeleton />
           ) : filtered.length === 0 ? (
-            search || activeTag !== "all" ? (
+            search || selectedTypes.size > 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-6">
                 <p className="text-sm text-fg/50 mb-1">No matching prompts</p>
                 <p className="text-xs text-fg/30">Try adjusting your search or filters</p>
@@ -1101,6 +1109,66 @@ export function SystemPromptsPage() {
         }}
         exporting={exporting}
       />
+
+      <BottomMenu
+        isOpen={typeFilterOpen}
+        onClose={() => setTypeFilterOpen(false)}
+        title="Filter by Type"
+        rightAction={
+          selectedTypes.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSelectedTypes(new Set())}
+              className="text-xs font-medium text-fg/55 hover:text-fg/80"
+            >
+              Clear
+            </button>
+          ) : null
+        }
+      >
+        <div className="space-y-1">
+          {ALL_PROMPT_TYPES.map((type) => {
+            const active = selectedTypes.has(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => {
+                  setSelectedTypes((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(type)) {
+                      next.delete(type);
+                    } else {
+                      next.add(type);
+                    }
+                    return next;
+                  });
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left",
+                  radius.md,
+                  interactive.transition.fast,
+                  active
+                    ? "bg-accent/15 text-accent/90"
+                    : "text-fg/75 hover:bg-fg/5 hover:text-fg",
+                )}
+              >
+                <span className="text-sm">{getPromptTypeName(type)}</span>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                    active
+                      ? "border-accent/60 bg-accent/30 text-accent"
+                      : "border-fg/15 bg-fg/5",
+                  )}
+                >
+                  {active && <Check className="h-3 w-3" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </BottomMenu>
 
       {/* Delete Confirmation */}
       <BottomMenu

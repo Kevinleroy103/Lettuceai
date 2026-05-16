@@ -2262,7 +2262,7 @@ function PromptEntryListItem({
   );
 }
 
-function getPromptTypeName(type: PromptType): string {
+export function getPromptTypeName(type: PromptType): string {
   switch (type) {
     case "undefined":
       return "Undefined";
