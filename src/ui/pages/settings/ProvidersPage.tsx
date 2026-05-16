@@ -235,7 +235,7 @@ export function ProvidersPage() {
   }, [activeTab, openEditor, openAudioEditor]);
 
   const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
-    <div className="flex h-64 flex-col items-center justify-center">
+    <div className="flex h-64 flex-col items-center justify-center lg:col-span-2">
       <EthernetPort className="mb-3 h-12 w-12 text-fg/20" />
       <h3 className="mb-1 text-lg font-medium text-fg">{t("providers.empty.title")}</h3>
       <p className="mb-4 text-center text-sm text-fg/50">{t("providers.empty.description")}</p>
@@ -249,7 +249,7 @@ export function ProvidersPage() {
   );
 
   const AudioEmptyState = ({ onCreate }: { onCreate: () => void }) => (
-    <div className="flex h-64 flex-col items-center justify-center">
+    <div className="flex h-64 flex-col items-center justify-center lg:col-span-2">
       <Mic className="mb-3 h-12 w-12 text-fg/20" />
       <h3 className="mb-1 text-lg font-medium text-fg">
         {t("providers.extra.audioEmpty.title")}
@@ -268,14 +268,15 @@ export function ProvidersPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+96px)]">
+      <div className="flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+96px)] lg:px-8 lg:pt-8 lg:pb-10">
+        <div className="mx-auto w-full max-w-5xl">
         {activeTab === "llm" ? (
           <div
             role="tabpanel"
             id={llmPanelId}
             aria-labelledby={llmTabId}
             tabIndex={0}
-            className="space-y-2"
+            className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3"
           >
             {!loading && providers.length === 0 && <EmptyState onCreate={() => openEditor()} />}
             {providers.map((provider) => {
@@ -320,7 +321,7 @@ export function ProvidersPage() {
             id={audioPanelId}
             aria-labelledby={audioTabId}
             tabIndex={0}
-            className="space-y-2"
+            className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3"
           >
             {!audioLoading && audioProviders.length === 0 && (
               <AudioEmptyState onCreate={() => openAudioEditor()} />
@@ -356,7 +357,7 @@ export function ProvidersPage() {
               </button>
             ))}
             {audioProviders.length > 0 && (
-              <p className="px-1 pt-3 text-[11px] text-fg/40">
+              <p className="px-1 pt-3 text-[11px] text-fg/40 lg:col-span-2">
                 Manage voices, voice library, and audio cache from{" "}
                 <button
                   onClick={() => navigate("/settings/voices")}
@@ -369,6 +370,7 @@ export function ProvidersPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {activeTab === "llm" && (
@@ -1147,7 +1149,7 @@ export function ProvidersPage() {
 
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-30 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 lg:left-[var(--settings-sidebar-w,0px)]",
+          "fixed bottom-0 left-0 right-0 z-30 border-t px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 lg:hidden",
           colors.glass.strong,
         )}
       >
