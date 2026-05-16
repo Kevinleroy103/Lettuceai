@@ -1308,6 +1308,23 @@ function PromptEntryConditionsPanel({
   );
 }
 
+function SectionHeader({
+  label,
+  trailing,
+}: {
+  label: string;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-fg/8 pt-4">
+      <h3 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-fg/35">
+        {label}
+      </h3>
+      {trailing}
+    </div>
+  );
+}
+
 function PromptEntryEditorForm({
   entry,
   promptType,
@@ -1349,6 +1366,12 @@ function PromptEntryEditorForm({
   const showsLegacyImageToken = Object.values(IMAGE_ENTRY_SLOT_TOKENS).includes(
     entry.content.trim(),
   );
+  const conditionDraft = useMemo(
+    () => decomposeConditionTree(entry.conditions),
+    [entry.conditions],
+  );
+  const conditionsCount = conditionDraft.include.length + conditionDraft.exclude.length;
+  const [conditionsOpen, setConditionsOpen] = useState(conditionsCount > 0);
 
   return (
     <div className="space-y-5">
@@ -1373,6 +1396,29 @@ function PromptEntryEditorForm({
           </span>
         </div>
       </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-fg/55">{contentLabel}</label>
+        <textarea
+          ref={(el) => {
+            onTextareaRef(entry.id, el);
+          }}
+          value={entry.content}
+          onChange={(event) => onUpdate({ content: event.target.value })}
+          onFocus={() => onTextareaFocus(entry.id)}
+          rows={contentRows}
+          className="w-full resize-none rounded-xl border border-fg/10 bg-surface-el/30 px-3.5 py-3 font-mono text-sm leading-relaxed text-fg placeholder-fg/30"
+          placeholder={contentPlaceholder}
+        />
+        <p className="text-[11px] text-fg/45">{contentHint}</p>
+        {entryKind === "image" && showsLegacyImageToken ? (
+          <p className="text-[11px] text-fg/38">
+            Legacy token detected. It is no longer required once this entry has an image attachment.
+          </p>
+        ) : null}
+      </div>
+
+      <SectionHeader label="Basic" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -1477,6 +1523,8 @@ function PromptEntryEditorForm({
           </div>
         </div>
       ) : null}
+
+      <SectionHeader label="Injection" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -1586,28 +1634,31 @@ function PromptEntryEditorForm({
         ) : null}
       </div>
 
-      <PromptEntryConditionsPanel entry={entry} onUpdate={onUpdate} />
+      <SectionHeader
+        label="Conditions"
+        trailing={
+          <button
+            type="button"
+            onClick={() => setConditionsOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-1 text-[11px] text-fg/60 hover:border-fg/20 hover:text-fg/80"
+          >
+            <span>
+              {conditionsCount > 0
+                ? `${conditionsCount} rule${conditionsCount === 1 ? "" : "s"}`
+                : "None"}
+            </span>
+            {conditionsOpen ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+          </button>
+        }
+      />
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-fg/55">{contentLabel}</label>
-        <textarea
-          ref={(el) => {
-            onTextareaRef(entry.id, el);
-          }}
-          value={entry.content}
-          onChange={(event) => onUpdate({ content: event.target.value })}
-          onFocus={() => onTextareaFocus(entry.id)}
-          rows={contentRows}
-          className="w-full resize-none rounded-xl border border-fg/10 bg-surface-el/30 px-3.5 py-3 font-mono text-sm leading-relaxed text-fg placeholder-fg/30"
-          placeholder={contentPlaceholder}
-        />
-        <p className="text-[11px] text-fg/45">{contentHint}</p>
-        {entryKind === "image" && showsLegacyImageToken ? (
-          <p className="text-[11px] text-fg/38">
-            Legacy token detected. It is no longer required once this entry has an image attachment.
-          </p>
-        ) : null}
-      </div>
+      {conditionsOpen ? (
+        <PromptEntryConditionsPanel entry={entry} onUpdate={onUpdate} />
+      ) : null}
     </div>
   );
 }
