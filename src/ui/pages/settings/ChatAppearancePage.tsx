@@ -442,7 +442,7 @@ function LivePreview({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border border-fg/10 p-3",
+        "relative overflow-hidden rounded-xl border border-fg/10 p-3 pb-5",
         !hasBg && "bg-fg/5",
       )}
     >
@@ -835,34 +835,27 @@ export function ChatAppearancePage() {
 
   if (isLoading) return null;
 
-  const previewHeader = (
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.25em] text-fg/35">
-          {t("chatAppearance.preview.label")}
-        </h2>
-      </div>
-      {character && (
-        <button
-          type="button"
-          onClick={() => setLivePreview((v) => !v)}
-          className={cn(
-            "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all",
-            livePreview
-              ? "border-accent/40 bg-accent/15 text-accent"
-              : "border-fg/10 bg-fg/5 text-fg/40 hover:text-fg/60",
-          )}
-        >
-          <Eye size={11} />
-          {livePreview ? t("chatAppearance.preview.live") : t("chatAppearance.preview.generic")}
-        </button>
-      )}
+  const previewHeader = character ? (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        type="button"
+        onClick={() => setLivePreview((v) => !v)}
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all",
+          livePreview
+            ? "border-accent/40 bg-accent/15 text-accent"
+            : "border-fg/10 bg-fg/5 text-fg/40 hover:text-fg/60",
+        )}
+      >
+        <Eye size={11} />
+        {livePreview ? t("chatAppearance.preview.live") : t("chatAppearance.preview.generic")}
+      </button>
     </div>
-  );
+  ) : null;
 
   const previewSurface = (
     <div className="space-y-3">
-      {previewHeader}
+      {character && previewHeader}
       <LivePreview
         settings={effectiveSettings}
         character={character}
@@ -1189,7 +1182,7 @@ export function ChatAppearancePage() {
   );
 
   return (
-    <div className="pb-16">
+    <div className="px-3 pt-4 pb-24 lg:px-8 lg:pt-6 lg:pb-12">
       {mode === "character" && character && (
         <div className="mb-5 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-fg/60 lg:max-w-5xl lg:mx-auto">
           Customizing chat appearance for{" "}
@@ -1198,8 +1191,11 @@ export function ChatAppearancePage() {
         </div>
       )}
 
-      {/* Desktop: two-column layout with sticky preview */}
+      {/* Desktop: two-column layout with sticky preview on the right */}
       <div className="lg:flex lg:items-start lg:gap-8 lg:max-w-5xl lg:mx-auto">
+        {/* Settings column */}
+        <div className="flex-1 min-w-0 space-y-5">{settingsContent}</div>
+
         {!isMobileViewport && (
           <div
             ref={previewRef}
@@ -1208,9 +1204,6 @@ export function ChatAppearancePage() {
             {previewSurface}
           </div>
         )}
-
-        {/* Settings column */}
-        <div className="flex-1 min-w-0 space-y-5">{settingsContent}</div>
       </div>
 
       <AnimatePresence>
