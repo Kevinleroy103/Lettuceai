@@ -896,20 +896,26 @@ pub async fn connect_as_passenger(
         // Re-acquire state here to avoid lifetime issues
         let state = app_clone.state::<SyncManagerState>();
 
-        if let Err(e) = run_passenger_session(app_clone.clone(), stream, &mut rx, pin).await {
-            state
-                .set_status(
-                    &app_clone,
-                    SyncStatus::Error {
-                        message: e.to_string(),
-                    },
-                )
-                .await;
-        } else {
-            // Success
-            state
-                .set_status(&app_clone, SyncStatus::SyncCompleted)
-                .await;
+        let result = run_passenger_session(app_clone.clone(), stream, &mut rx, pin).await;
+
+        *state.shutdown_tx.lock().await = None;
+
+        match result {
+            Err(e) => {
+                state
+                    .set_status(
+                        &app_clone,
+                        SyncStatus::Error {
+                            message: e.to_string(),
+                        },
+                    )
+                    .await;
+            }
+            Ok(()) => {
+                state
+                    .set_status(&app_clone, SyncStatus::SyncCompleted)
+                    .await;
+            }
         }
     });
 

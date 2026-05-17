@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tauri::Manager;
 
+use crate::chat_manager::types::MemoryEmbedding;
 use crate::storage_manager::db::DbConnection;
 use crate::storage_manager::memory_embeddings::SessionKind;
 use crate::sync::models::{
@@ -43,6 +44,52 @@ struct EntityHeadRecord {
     source_device_id: String,
     source_created_at: i64,
     source_change_id: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyMemoryEmbeddingV0 {
+    id: String,
+    text: String,
+    embedding: Vec<f32>,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacySyncedMemoryEmbeddingV0 {
+    session_id: String,
+    session_kind: String,
+    memory: LegacyMemoryEmbeddingV0,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacyMemoryEmbeddingV1 {
+    id: String,
+    text: String,
+    embedding: Vec<f32>,
+    #[serde(default)]
+    created_at: u64,
+    #[serde(default)]
+    token_count: u32,
+    #[serde(default)]
+    is_cold: bool,
+    #[serde(default)]
+    last_accessed_at: u64,
+    #[serde(default = "legacy_default_importance_score")]
+    importance_score: f32,
+    #[serde(default)]
+    is_pinned: bool,
+    #[serde(default)]
+    access_count: u32,
+    #[serde(default)]
+    match_score: Option<f32>,
+    #[serde(default)]
+    category: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct LegacySyncedMemoryEmbeddingV1 {
+    session_id: String,
+    session_kind: String,
+    memory: LegacyMemoryEmbeddingV1,
 }
 
 #[derive(Debug, Clone)]
@@ -387,6 +434,32 @@ pub fn record_peer_cursor(
            ON CONFLICT(peer_device_id, domain)
            DO UPDATE SET last_change_id = excluded.last_change_id"#,
         params![peer_device_id, sync_domain_name(domain), last_change_id],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    Ok(())
+}
+
+pub fn peer_cursor(
+    conn: &DbConnection,
+    peer_device_id: &str,
+    domain: SyncDomain,
+) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT last_change_id FROM sync_peer_cursors WHERE peer_device_id = ?1 AND domain = ?2",
+        params![peer_device_id, sync_domain_name(domain)],
+        |row| row.get::<_, i64>(0),
+    )
+    .or_else(|err| match err {
+        rusqlite::Error::QueryReturnedNoRows => Ok(0),
+        other => Err(other),
+    })
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+}
+
+pub fn clear_domain_heads(conn: &DbConnection, domain: SyncDomain) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM sync_entity_heads WHERE domain = ?1",
+        params![sync_domain_name(domain)],
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
@@ -1578,7 +1651,7 @@ fn materialize_domain_heads(conn: &mut DbConnection, domain: SyncDomain) -> Resu
                     "group_session" => snapshot.group_sessions.push(deserialize_head(&key, &head)?),
                     "memory_embedding" => snapshot
                         .memory_embeddings
-                        .push(deserialize_head(&key, &head)?),
+                        .push(deserialize_memory_embedding_head(&key, &head)?),
                     "group_participation" => snapshot
                         .group_participation
                         .push(deserialize_head(&key, &head)?),
@@ -1613,13 +1686,11 @@ fn materialize_domain_heads(conn: &mut DbConnection, domain: SyncDomain) -> Resu
                         .push(deserialize_head(&key, &head)?),
                     "memory_embedding" => snapshot
                         .memory_embeddings
-                        .push(deserialize_head(&key, &head)?),
+                        .push(deserialize_memory_embedding_head(&key, &head)?),
                     _ => {}
                 }
             }
-            let payload = bincode::serialize(&snapshot)
-                .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-            apply_sessions_snapshot(conn, &payload)
+            apply_sessions_snapshot_struct(conn, snapshot)
         }
         SyncDomain::Messages => {
             let mut snapshot = MessagesSnapshot {
@@ -1658,6 +1729,137 @@ fn payload_hex(bytes: &[u8]) -> String {
         out.push_str(&format!("{:02x}", byte));
     }
     out
+}
+
+fn legacy_default_importance_score() -> f32 {
+    1.0
+}
+
+fn upgrade_legacy_memory_embedding_v0(
+    value: LegacySyncedMemoryEmbeddingV0,
+) -> SyncedMemoryEmbedding {
+    SyncedMemoryEmbedding {
+        session_id: value.session_id,
+        session_kind: value.session_kind,
+        memory: MemoryEmbedding {
+            id: value.memory.id,
+            text: value.memory.text,
+            embedding: value.memory.embedding,
+            created_at: 0,
+            token_count: 0,
+            is_cold: false,
+            last_accessed_at: 0,
+            importance_score: 1.0,
+            persistence_importance: 1.0,
+            prompt_importance: 1.0,
+            volatility: 0.4,
+            is_pinned: false,
+            access_count: 0,
+            embedding_source_version: None,
+            embedding_dimensions: None,
+            match_score: None,
+            category: None,
+            observed_at: None,
+            observed_time_precision: None,
+            canonical_entities: Vec::new(),
+            fact_signature: None,
+            fact_polarity: None,
+            source_role: None,
+            source_message_id: None,
+            superseded_by: None,
+            superseded_at: None,
+            supersedes: Vec::new(),
+        },
+    }
+}
+
+fn upgrade_legacy_memory_embedding_v1(
+    value: LegacySyncedMemoryEmbeddingV1,
+) -> SyncedMemoryEmbedding {
+    SyncedMemoryEmbedding {
+        session_id: value.session_id,
+        session_kind: value.session_kind,
+        memory: MemoryEmbedding {
+            id: value.memory.id,
+            text: value.memory.text,
+            embedding: value.memory.embedding,
+            created_at: value.memory.created_at,
+            token_count: value.memory.token_count,
+            is_cold: value.memory.is_cold,
+            last_accessed_at: value.memory.last_accessed_at,
+            importance_score: value.memory.importance_score,
+            persistence_importance: value.memory.importance_score,
+            prompt_importance: value.memory.importance_score,
+            volatility: 0.4,
+            is_pinned: value.memory.is_pinned,
+            access_count: value.memory.access_count,
+            embedding_source_version: None,
+            embedding_dimensions: None,
+            match_score: value.memory.match_score,
+            category: value.memory.category,
+            observed_at: None,
+            observed_time_precision: None,
+            canonical_entities: Vec::new(),
+            fact_signature: None,
+            fact_polarity: None,
+            source_role: None,
+            source_message_id: None,
+            superseded_by: None,
+            superseded_at: None,
+            supersedes: Vec::new(),
+        },
+    }
+}
+
+fn deserialize_memory_embedding_head(
+    key: &EntityKey,
+    head: &EntityHeadRecord,
+) -> Result<SyncedMemoryEmbedding, String> {
+    match bincode::deserialize(&head.payload) {
+        Ok(value) => Ok(value),
+        Err(current_err) => {
+            if let Ok(value) = bincode::deserialize::<LegacySyncedMemoryEmbeddingV1>(&head.payload)
+            {
+                log_info_global(
+                    "sync_payload",
+                    format!(
+                        "decoded legacy v1 memory_embedding domain={:?} entity_id={} source_device_id={} source_change_id={}",
+                        key.domain, key.entity_id, head.source_device_id, head.source_change_id
+                    ),
+                );
+                return Ok(upgrade_legacy_memory_embedding_v1(value));
+            }
+            if let Ok(value) = bincode::deserialize::<LegacySyncedMemoryEmbeddingV0>(&head.payload)
+            {
+                log_info_global(
+                    "sync_payload",
+                    format!(
+                        "decoded legacy v0 memory_embedding domain={:?} entity_id={} source_device_id={} source_change_id={}",
+                        key.domain, key.entity_id, head.source_device_id, head.source_change_id
+                    ),
+                );
+                return Ok(upgrade_legacy_memory_embedding_v0(value));
+            }
+            log_error_global(
+                "sync_payload",
+                format!(
+                    "failed to deserialize domain={:?} entity_type={} entity_id={} source_device_id={} source_change_id={} payload_bytes={} payload_hex={}",
+                    key.domain,
+                    key.entity_type,
+                    key.entity_id,
+                    head.source_device_id,
+                    head.source_change_id,
+                    head.payload.len(),
+                    payload_hex(&head.payload)
+                ),
+            );
+            Err(crate::utils::err_to_string(
+                module_path!(),
+                line!(),
+                current_err,
+            ))
+        }
+    }
 }
 
 fn deserialize_head<T: serde::de::DeserializeOwned + serde::Serialize>(
@@ -2514,6 +2716,13 @@ fn apply_groups_snapshot(conn: &mut DbConnection, payload: &[u8]) -> Result<(), 
 fn apply_sessions_snapshot(conn: &mut DbConnection, payload: &[u8]) -> Result<(), String> {
     let snapshot: SessionsSnapshot = bincode::deserialize(payload)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+    apply_sessions_snapshot_struct(conn, snapshot)
+}
+
+fn apply_sessions_snapshot_struct(
+    conn: &mut DbConnection,
+    snapshot: SessionsSnapshot,
+) -> Result<(), String> {
     let has_memory_embedding_records = !snapshot.memory_embeddings.is_empty();
     let incoming_sessions = snapshot
         .sessions
@@ -2861,7 +3070,6 @@ type GlobalCoreData = (
 );
 
 fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
-    // Meta
     let mut stmt = conn
         .prepare("SELECT key, value FROM meta")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -2876,7 +3084,6 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .map(|r| r.unwrap())
         .collect();
 
-    // Settings
     let mut stmt = conn.prepare("SELECT id, default_provider_credential_id, default_model_id, app_state, advanced_model_settings, prompt_template_id, system_prompt, advanced_settings, migration_version, created_at, updated_at FROM settings").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let settings_iter = stmt
         .query_map([], |r| {
@@ -2895,9 +3102,8 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
             })
         })
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
-    let settings: Vec<Settings> = settings_iter.map(|r| r.unwrap()).collect(); // Expect safe unwrap if query OK
+    let settings: Vec<Settings> = settings_iter.map(|r| r.unwrap()).collect();
 
-    // Personas
     let mut stmt = conn
         .prepare("SELECT id, title, description, nickname, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, design_description, design_reference_image_ids, COALESCE(active_lorebook_ids, '[]'), is_default, created_at, updated_at FROM personas")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -2924,7 +3130,6 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .map(|r| r.unwrap())
         .collect();
 
-    // Models
     let mut stmt = conn.prepare("SELECT id, name, provider_id, provider_credential_id, provider_label, display_name, created_at, model_type, input_scopes, output_scopes, advanced_model_settings, prompt_template_id, system_prompt FROM models").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let models: Vec<Model> = stmt
         .query_map([], |r| {
@@ -2948,7 +3153,6 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .map(|r| r.unwrap())
         .collect();
 
-    // Secrets
     let mut stmt = conn
         .prepare("SELECT service, account, value, created_at, updated_at FROM secrets")
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -2966,7 +3170,6 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .map(|r| r.unwrap())
         .collect();
 
-    // Provider Creds
     let mut stmt = conn.prepare("SELECT id, provider_id, label, api_key_ref, api_key, base_url, default_model, headers, config FROM provider_credentials").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let creds: Vec<ProviderCredential> = stmt
         .query_map([], |r| {
@@ -2986,7 +3189,6 @@ fn fetch_global_core(conn: &DbConnection) -> Result<GlobalCoreData, String> {
         .map(|r| r.unwrap())
         .collect();
 
-    // Prompt Templates
     let mut stmt = conn.prepare("SELECT id, name, prompt_type, content, entries, condense_prompt_entries, created_at, updated_at FROM prompt_templates").map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let templates: Vec<PromptTemplate> = stmt
         .query_map([], |r| {
@@ -3092,7 +3294,6 @@ fn fetch_lorebooks(conn: &DbConnection, ids: &[String]) -> Result<Vec<u8>, Strin
         .map(|r| r.unwrap())
         .collect();
 
-    // Entries for these lorebooks
     let sql_ent = format!("SELECT id, lorebook_id, title, enabled, always_active, keywords, case_sensitive, content, priority, display_order, created_at, updated_at FROM lorebook_entries WHERE lorebook_id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql_ent)
@@ -3148,7 +3349,6 @@ fn fetch_characters_data(
     }
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-    // Characters
     let sql = format!("SELECT id, name, avatar_path, avatar_crop_x, avatar_crop_y, avatar_crop_scale, design_description, design_reference_image_ids, background_image_path, definition, description, nickname, scenario, creator_notes, creator, creator_notes_multilingual, source, tags, default_scene_id, default_model_id, fallback_model_id, COALESCE(mode, 'roleplay'), companion, memory_type, COALESCE(active_lorebook_ids, '[]'), prompt_template_id, group_chat_prompt_template_id, group_chat_roleplay_prompt_template_id, system_prompt, voice_config, voice_autoplay, disable_avatar_gradient, COALESCE(avatar_gradient_source, 'base'), custom_gradient_enabled, custom_gradient_colors, custom_text_color, custom_text_secondary, chat_appearance, default_chat_template_id, created_at, updated_at FROM characters WHERE id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql)
@@ -3203,7 +3403,6 @@ fn fetch_characters_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Rules
     let sql_rules = format!(
         "SELECT character_id, idx, rule FROM character_rules WHERE character_id IN ({})",
         placeholders
@@ -3224,7 +3423,6 @@ fn fetch_characters_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Scenes
     let sql_scenes = format!("SELECT id, character_id, content, direction, background_image_path, created_at, selected_variant_id FROM scenes WHERE character_id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql_scenes)
@@ -3245,7 +3443,6 @@ fn fetch_characters_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Scene Variants
     let sql_vars = format!("SELECT id, scene_id, content, direction, created_at FROM scene_variants WHERE scene_id IN (SELECT id FROM scenes WHERE character_id IN ({}))", placeholders);
     let mut stmt = conn
         .prepare(&sql_vars)
@@ -3329,7 +3526,6 @@ fn fetch_sessions_data(
     }
     let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
-    // Sessions
     let sql = format!("SELECT id, character_id, title, background_image_path, system_prompt, COALESCE(mode, 'roleplay'), selected_scene_id, prompt_template_id, lorebook_ids_override, author_note, persona_id, persona_disabled, voice_autoplay, temperature, top_p, max_output_tokens, frequency_penalty, presence_penalty, top_k, companion_state, memories, memory_embeddings, memory_summary, memory_summary_token_count, memory_tool_events, archived, created_at, updated_at, memory_status, memory_error, memory_progress_step FROM sessions WHERE id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql)
@@ -3383,7 +3579,6 @@ fn fetch_sessions_data(
         );
     }
 
-    // Messages
     let sql_msg = format!("SELECT id, session_id, role, content, created_at, visible_in_chat, scene_edited, prompt_tokens, completion_tokens, total_tokens, selected_variant_id, is_pinned, memory_refs, used_lorebook_entries, attachments, reasoning FROM messages WHERE session_id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql_msg)
@@ -3413,7 +3608,6 @@ fn fetch_sessions_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Message Variants
     let sql_var = format!("SELECT id, message_id, content, created_at, prompt_tokens, completion_tokens, total_tokens, reasoning FROM message_variants WHERE message_id IN (SELECT id FROM messages WHERE session_id IN ({}))", placeholders);
     let mut stmt = conn
         .prepare(&sql_var)
@@ -3435,7 +3629,6 @@ fn fetch_sessions_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Usage Records
     let sql_usage = format!("SELECT id, timestamp, session_id, character_id, character_name, model_id, model_name, provider_id, provider_label, operation_type, finish_reason, prompt_tokens, completion_tokens, total_tokens, memory_tokens, summary_tokens, reasoning_tokens, image_tokens, prompt_cost, completion_cost, total_cost, success, error_message FROM usage_records WHERE session_id IN ({})", placeholders);
     let mut stmt = conn
         .prepare(&sql_usage)
@@ -3472,7 +3665,6 @@ fn fetch_sessions_data(
         .map(|r| r.unwrap())
         .collect();
 
-    // Usage Metadata
     let sql_meta = format!("SELECT usage_id, key, value FROM usage_metadata WHERE usage_id IN (SELECT id FROM usage_records WHERE session_id IN ({}))", placeholders);
     let mut stmt = conn
         .prepare(&sql_meta)

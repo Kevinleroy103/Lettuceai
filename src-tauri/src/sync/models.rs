@@ -50,7 +50,7 @@ pub struct Persona {
     pub design_reference_image_ids: Option<String>,
     #[serde(default)]
     pub active_lorebook_ids: Option<String>,
-    pub is_default: i64, // Boolean as integer
+    pub is_default: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -186,8 +186,6 @@ pub struct GroupCharacter {
     pub memory_type: String,
 }
 
-// Layer 2: Lorebooks
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncLorebook {
     pub id: String,
@@ -205,7 +203,7 @@ pub struct SyncLorebookEntry {
     pub title: String,
     pub enabled: i64,
     pub always_active: i64,
-    pub keywords: String, // JSON string
+    pub keywords: String,
     pub case_sensitive: i64,
     pub content: String,
     pub priority: i32,
@@ -213,8 +211,6 @@ pub struct SyncLorebookEntry {
     pub created_at: i64,
     pub updated_at: i64,
 }
-
-// Layer 3: Characters
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Character {
@@ -331,8 +327,6 @@ pub struct ChatTemplateMessage {
     pub role: String,
     pub content: String,
 }
-
-// Layer 4: Sessions
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
@@ -471,8 +465,6 @@ pub struct UsageMetadata {
     pub key: String,
     pub value: String,
 }
-
-// Layer 5: Group Sessions
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GroupSession {
