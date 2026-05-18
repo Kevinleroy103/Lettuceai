@@ -1564,6 +1564,22 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     let mut has_avatar_crop_x = false;
     let mut has_avatar_crop_y = false;
     let mut has_avatar_crop_scale = false;
+    let mut has_banner_crop_x = false;
+    let mut has_banner_crop_y = false;
+    let mut has_banner_crop_scale = false;
+    let mut has_card_type = false;
+    let mut has_design_description = false;
+    let mut has_design_reference_image_ids = false;
+    let mut has_mode = false;
+    let mut has_companion = false;
+    let mut has_memory_type = false;
+    let mut has_disable_avatar_gradient = false;
+    let mut has_prompt_template_id = false;
+    let mut has_group_chat_prompt_template_id = false;
+    let mut has_group_chat_roleplay_prompt_template_id = false;
+    let mut has_system_prompt = false;
+    let mut has_chat_appearance = false;
+    let mut has_default_chat_template_id = false;
     let mut rows2 = stmt2
         .query([])
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -1586,6 +1602,24 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             "avatar_crop_x" => has_avatar_crop_x = true,
             "avatar_crop_y" => has_avatar_crop_y = true,
             "avatar_crop_scale" => has_avatar_crop_scale = true,
+            "banner_crop_x" => has_banner_crop_x = true,
+            "banner_crop_y" => has_banner_crop_y = true,
+            "banner_crop_scale" => has_banner_crop_scale = true,
+            "card_type" => has_card_type = true,
+            "design_description" => has_design_description = true,
+            "design_reference_image_ids" => has_design_reference_image_ids = true,
+            "mode" => has_mode = true,
+            "companion" => has_companion = true,
+            "memory_type" => has_memory_type = true,
+            "disable_avatar_gradient" => has_disable_avatar_gradient = true,
+            "prompt_template_id" => has_prompt_template_id = true,
+            "group_chat_prompt_template_id" => has_group_chat_prompt_template_id = true,
+            "group_chat_roleplay_prompt_template_id" => {
+                has_group_chat_roleplay_prompt_template_id = true
+            }
+            "system_prompt" => has_system_prompt = true,
+            "chat_appearance" => has_chat_appearance = true,
+            "default_chat_template_id" => has_default_chat_template_id = true,
             _ => {}
         }
     }
@@ -1643,6 +1677,87 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_avatar_crop_scale {
         let _ = conn.execute(
             "ALTER TABLE characters ADD COLUMN avatar_crop_scale REAL",
+            [],
+        );
+    }
+    if !has_banner_crop_x {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN banner_crop_x REAL", []);
+    }
+    if !has_banner_crop_y {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN banner_crop_y REAL", []);
+    }
+    if !has_banner_crop_scale {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN banner_crop_scale REAL",
+            [],
+        );
+    }
+    if !has_card_type {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN card_type TEXT NOT NULL DEFAULT 'circle'",
+            [],
+        );
+    }
+    if !has_design_description {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN design_description TEXT",
+            [],
+        );
+    }
+    if !has_design_reference_image_ids {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN design_reference_image_ids TEXT",
+            [],
+        );
+    }
+    if !has_mode {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN mode TEXT NOT NULL DEFAULT 'roleplay'",
+            [],
+        );
+    }
+    if !has_companion {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN companion TEXT", []);
+    }
+    if !has_memory_type {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        );
+    }
+    if !has_disable_avatar_gradient {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN disable_avatar_gradient INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+    if !has_prompt_template_id {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN prompt_template_id TEXT",
+            [],
+        );
+    }
+    if !has_group_chat_prompt_template_id {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN group_chat_prompt_template_id TEXT",
+            [],
+        );
+    }
+    if !has_group_chat_roleplay_prompt_template_id {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN group_chat_roleplay_prompt_template_id TEXT",
+            [],
+        );
+    }
+    if !has_system_prompt {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN system_prompt TEXT", []);
+    }
+    if !has_chat_appearance {
+        let _ = conn.execute("ALTER TABLE characters ADD COLUMN chat_appearance TEXT", []);
+    }
+    if !has_default_chat_template_id {
+        let _ = conn.execute(
+            "ALTER TABLE characters ADD COLUMN default_chat_template_id TEXT",
             [],
         );
     }
