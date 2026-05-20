@@ -1095,6 +1095,7 @@ mod desktop {
                 }
             }
             let use_vision = vision_requested && mtmd_ctx.is_some();
+            let model_reloaded = engine.model_reloaded;
             let max_ctx = model.n_ctx_train().max(1);
             let backend_path_used = engine.backend_path_used.as_deref().unwrap_or("unknown");
             let gpu_load_fallback_activated = engine.gpu_load_fallback_activated;
@@ -1210,13 +1211,15 @@ mod desktop {
                 "strictModeEnabled",
                 json!(llama_strict_mode),
             );
-            emit_model_load_finalizing(
-                &app,
-                request_id.as_deref(),
-                model_path,
-                Some(backend_path_used),
-                gpu_load_fallback_activated,
-            );
+            if model_reloaded {
+                emit_model_load_finalizing(
+                    &app,
+                    request_id.as_deref(),
+                    model_path,
+                    Some(backend_path_used),
+                    gpu_load_fallback_activated,
+                );
+            }
             if !llama_strict_mode && cpu_runtime_active {
                 if let Some((safe_ctx, safe_batch)) = compute_cpu_fallback_limits(
                     model,
@@ -1776,13 +1779,15 @@ mod desktop {
                 ),
             );
             crate::utils::emit_debug(&app, "llama_runtime", runtime_settings);
-            emit_model_load_complete(
-                &app,
-                request_id.as_deref(),
-                model_path,
-                Some(backend_path_used.as_str()),
-                gpu_load_fallback_activated,
-            );
+            if model_reloaded {
+                emit_model_load_complete(
+                    &app,
+                    request_id.as_deref(),
+                    model_path,
+                    Some(backend_path_used.as_str()),
+                    gpu_load_fallback_activated,
+                );
+            }
 
             failure_stage = "prompt_evaluation";
             check_abort_signal(abort_rx.as_mut())?;

@@ -11,6 +11,7 @@ use tauri::Emitter;
 
 #[derive(Clone)]
 pub(super) struct LoadedEngine {
+    pub(super) model_reloaded: bool,
     pub(super) backend: Arc<LlamaBackend>,
     pub(super) model: Arc<LlamaModel>,
     pub(super) backend_path_used: Option<String>,
@@ -795,6 +796,7 @@ pub(super) fn load_engine(
     }
 
     Ok(LoadedEngine {
+        model_reloaded: should_reload,
         backend: guard
             .backend
             .clone()

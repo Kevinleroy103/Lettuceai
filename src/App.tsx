@@ -529,7 +529,9 @@ function App() {
               typeof payload.modelPath === "string" && payload.modelPath.trim()
                 ? payload.modelPath
                 : null;
-            const toastId = requestId ?? (modelPath ? `llama-model-load:${modelPath}` : null);
+            const requestToastId = requestId;
+            const pathToastId = modelPath ? `llama-model-load:${modelPath}` : null;
+            const toastId = pathToastId ?? requestToastId;
             if (!toastId) {
               return;
             }
@@ -543,6 +545,12 @@ function App() {
               status === LLAMA_MODEL_LOAD_STATUS_FAILED
             ) {
               toast.dismiss(toastId);
+              if (requestToastId && requestToastId !== toastId) {
+                toast.dismiss(requestToastId);
+              }
+              if (pathToastId && pathToastId !== toastId) {
+                toast.dismiss(pathToastId);
+              }
               return;
             }
 
