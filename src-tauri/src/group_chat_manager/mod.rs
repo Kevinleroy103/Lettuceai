@@ -12,6 +12,7 @@ mod selection;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
@@ -86,6 +87,7 @@ const ALLOWED_MEMORY_CATEGORIES: &[&str] = &[
     "other",
 ];
 const HARD_DELETE_CONFIDENCE_THRESHOLD: f32 = 0.7;
+const MEMORY_MIGRATION_EMBED_TIMEOUT_SECS: u64 = 90;
 
 fn dynamic_memory_summary_template_id(settings: &Settings) -> String {
     settings
@@ -2024,25 +2026,59 @@ async fn migrate_group_memory_embeddings_if_needed(
         0.0,
     );
 
-    for (idx, memory) in session.memory_embeddings.iter_mut().enumerate() {
-        if memory_embedding_requires_migration(memory, &target_source_version, target_dimensions) {
-            memory.embedding =
-                embedding::compute_embedding(app.clone(), memory.text.clone()).await?;
-            memory.embedding_source_version = Some(target_source_version.clone());
-            memory.embedding_dimensions = Some(target_dimensions);
+    let migration_result: Result<(), String> = async {
+        for (idx, memory) in session.memory_embeddings.iter_mut().enumerate() {
+            if memory_embedding_requires_migration(memory, &target_source_version, target_dimensions)
+            {
+                memory.embedding = tokio::time::timeout(
+                    Duration::from_secs(MEMORY_MIGRATION_EMBED_TIMEOUT_SECS),
+                    embedding::compute_embedding(app.clone(), memory.text.clone()),
+                )
+                .await
+                .map_err(|_| {
+                    crate::utils::err_msg(
+                        module_path!(),
+                        line!(),
+                        format!(
+                            "Timed out after {}s while re-embedding saved memory {}/{}",
+                            MEMORY_MIGRATION_EMBED_TIMEOUT_SECS,
+                            idx + 1,
+                            total
+                        ),
+                    )
+                })??;
+                memory.embedding_source_version = Some(target_source_version.clone());
+                memory.embedding_dimensions = Some(target_dimensions);
+            }
+
+            emit_memory_vector_migration_toast(
+                app,
+                &toast_id,
+                "Migrating memory vectors",
+                &format!("Re-embedded {}/{} saved memories.", idx + 1, total),
+                (idx + 1) as f32 / total as f32,
+            );
         }
 
-        emit_memory_vector_migration_toast(
-            app,
-            &toast_id,
-            "Migrating memory vectors",
-            &format!("Re-embedded {}/{} saved memories.", idx + 1, total),
-            (idx + 1) as f32 / total as f32,
+        save_group_session_memories(app, session, pool)?;
+        Ok(())
+    }
+    .await;
+
+    dismiss_memory_vector_migration_toast(app, &toast_id);
+
+    if let Err(err) = migration_result {
+        let _ = app.emit(
+            "app://toast",
+            json!({
+                "variant": "error",
+                "title": "Memory migration failed",
+                "description": err.clone(),
+            }),
         );
+        return Err(err);
     }
 
-    save_group_session_memories(app, session, pool)?;
-    dismiss_memory_vector_migration_toast(app, &toast_id);
     let _ = app.emit(
         "app://toast",
         json!({
