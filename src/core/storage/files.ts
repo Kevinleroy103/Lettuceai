@@ -255,6 +255,7 @@ export const storageBridge = {
 
   // Characters
   charactersList: () => invoke<string>("characters_list").then((s) => JSON.parse(s) as any[]),
+  characterGet: (id: string) => invoke<string>("character_get", { id }).then((s) => JSON.parse(s)),
   characterUpsert: (character: unknown) =>
     invoke<string>("character_upsert", { characterJson: JSON.stringify(character) }).then((s) =>
       JSON.parse(s),

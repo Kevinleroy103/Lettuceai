@@ -553,6 +553,14 @@ pub fn characters_list(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn character_get(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let conn = open_db(&app)?;
+    let character = read_character(&conn, &id)?;
+    serde_json::to_string(&character)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
+}
+
+#[tauri::command]
 pub fn character_upsert(app: tauri::AppHandle, character_json: String) -> Result<String, String> {
     let character = serde_json::from_str::<JsonValue>(&character_json)
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;

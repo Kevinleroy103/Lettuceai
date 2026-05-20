@@ -59,6 +59,7 @@ macro_rules! invoke_handler {
             crate::storage_manager::settings::settings_set_system_prompt,
             crate::storage_manager::settings::settings_set_migration_version,
             crate::storage_manager::characters::characters_list,
+            crate::storage_manager::characters::character_get,
             crate::storage_manager::characters::character_upsert,
             crate::storage_manager::characters::character_update_chat_appearance,
             crate::storage_manager::characters::character_delete,

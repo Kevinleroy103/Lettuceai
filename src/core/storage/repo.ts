@@ -881,6 +881,16 @@ export async function listCharacters(): Promise<Character[]> {
   return parsed;
 }
 
+export async function getCharacter(id: string): Promise<Character | null> {
+  try {
+    const data = await storageBridge.characterGet(id);
+    return CharacterSchema.parse(data);
+  } catch (error) {
+    logger.warn(`Failed to load character ${id}`, error);
+    return null;
+  }
+}
+
 export async function listImageLibraryItems(): Promise<ImageLibraryItem[]> {
   const data = await storageBridge.imageLibraryList();
   return z.array(ImageLibraryItemSchema).parse(data);

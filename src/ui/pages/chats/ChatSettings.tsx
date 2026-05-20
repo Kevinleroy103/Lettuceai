@@ -32,6 +32,7 @@ import {
   readSettings,
   saveCharacter,
   createSession,
+  getCharacter,
   listPersonas,
   getSessionMeta,
   saveSession,
@@ -340,6 +341,21 @@ export function ChatSettingsContent({
     }
   }, []);
 
+  const loadCharacter = useCallback(async () => {
+    if (!characterId) {
+      setCurrentCharacter(character);
+      return;
+    }
+
+    try {
+      const latestCharacter = (await getCharacter(characterId)) ?? character;
+      setCurrentCharacter(latestCharacter);
+    } catch (error) {
+      console.error("Failed to load latest character:", error);
+      setCurrentCharacter(character);
+    }
+  }, [character, characterId]);
+
   const loadPersonas = useCallback(async () => {
     const personaList = await listPersonas();
     setPersonas(personaList);
@@ -376,9 +392,10 @@ export function ChatSettingsContent({
 
   useEffect(() => {
     loadModels();
+    loadCharacter();
     loadPersonas();
     loadSession();
-  }, [loadModels, loadPersonas, loadSession]);
+  }, [loadCharacter, loadModels, loadPersonas, loadSession]);
 
   useEffect(() => {
     setCurrentCharacter(character);
