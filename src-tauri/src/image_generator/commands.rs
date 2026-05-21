@@ -150,7 +150,14 @@ pub async fn generate_image(
             format!("Sending request to: {}", url),
         );
 
-        let client = reqwest::Client::new();
+        let client = crate::transport::build_client(
+            &app,
+            None,
+            false,
+            Some(request.provider_id.as_str()),
+            Some(url.as_str()),
+        )
+        .map_err(|e| crate::utils::err_msg(module_path!(), line!(), e.to_string()))?;
         let mut req_builder = client.post(&url);
 
         let is_multipart = matches!(payload, ImageRequestPayload::Multipart(_));
