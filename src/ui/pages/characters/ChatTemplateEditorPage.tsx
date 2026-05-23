@@ -54,6 +54,12 @@ function formatSceneLabel(
   return raw.replace(/\s+/g, " ").replace(/^[*\-+#>\s]+/, "");
 }
 
+function truncateLabel(value: string, maxLength = 72): string {
+  const normalized = value.trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
 /* ─── Convert template message to StoredMessage for ChatMessage ───── */
 
 function toStoredMessage(msg: ChatTemplateMessage): StoredMessage {
@@ -236,7 +242,7 @@ export default function ChatTemplateEditorPage() {
   // Scene selector
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [showSceneMenu, setShowSceneMenu] = useState(false);
-  const [_showMobileOptionsMenu, setShowMobileOptionsMenu] = useState(false);
+  const [showMobileOptionsMenu, setShowMobileOptionsMenu] = useState(false);
   const [showPromptTemplateMenu, setShowPromptTemplateMenu] = useState(false);
   const [showLorebookMenu, setShowLorebookMenu] = useState(false);
   const [promptTemplates, setPromptTemplates] = useState<SystemPromptTemplate[]>([]);
@@ -269,6 +275,10 @@ export default function ChatTemplateEditorPage() {
       setPromptTemplates(
         templates.filter(
           (template) =>
+            (template.promptType === "undefined" ||
+              template.promptType === "directChat" ||
+              template.promptType === "groupChatConversational" ||
+              template.promptType === "groupChatRoleplay") &&
             template.id !== APP_DYNAMIC_SUMMARY_TEMPLATE_ID &&
             template.id !== APP_DYNAMIC_MEMORY_TEMPLATE_ID &&
             template.id !== APP_HELP_ME_REPLY_TEMPLATE_ID &&
@@ -508,6 +518,8 @@ export default function ChatTemplateEditorPage() {
   const selectedPromptTemplate = promptTemplates.find(
     (template) => template.id === selectedPromptTemplateId,
   );
+  const selectedPromptTemplateLabel =
+    selectedPromptTemplate?.name ?? t("characters.templateEditor.characterDefault");
   const selectedLorebooks = Array.isArray(lorebookIdsOverride)
     ? lorebooks.filter((lorebook) => lorebookIdsOverride.includes(lorebook.id))
     : [];
@@ -808,6 +820,45 @@ export default function ChatTemplateEditorPage() {
           {chatPreview}
         </div>
       </div>
+
+      <BottomMenu
+        isOpen={showMobileOptionsMenu}
+        onClose={() => setShowMobileOptionsMenu(false)}
+        title="Template Options"
+      >
+        <MenuButtonGroup>
+          <MenuButton
+            icon={<MessageSquare className="h-4 w-4" />}
+            title={t("characters.templateEditor.scene")}
+            description={truncateLabel(selectedSceneLabel)}
+            color="from-blue-500 to-cyan-600"
+            onClick={() => {
+              setShowMobileOptionsMenu(false);
+              setShowSceneMenu(true);
+            }}
+          />
+          <MenuButton
+            icon={<SlidersHorizontal className="h-4 w-4" />}
+            title={t("characters.templateEditor.systemPrompt")}
+            description={truncateLabel(selectedPromptTemplateLabel)}
+            color="from-indigo-500 to-blue-600"
+            onClick={() => {
+              setShowMobileOptionsMenu(false);
+              setShowPromptTemplateMenu(true);
+            }}
+          />
+          <MenuButton
+            icon={<BookOpen className="h-4 w-4" />}
+            title="Lorebooks"
+            description={lorebookLabel}
+            color="from-amber-500 to-orange-600"
+            onClick={() => {
+              setShowMobileOptionsMenu(false);
+              setShowLorebookMenu(true);
+            }}
+          />
+        </MenuButtonGroup>
+      </BottomMenu>
 
       {/* Scene selector bottom menu */}
       <BottomMenu
