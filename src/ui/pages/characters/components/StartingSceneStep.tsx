@@ -632,7 +632,7 @@ export function StartingSceneStep({
               : "cursor-not-allowed border border-fg/5 bg-fg/5 text-fg/30",
           )}
         >
-          {isCompanion && scenes.length === 0 ? "Skip Context" : t("characters.scenes.continueToScenes")}
+          {isCompanion && scenes.length === 0 ? "Skip Context" : t("common.buttons.continue")}
         </button>
       </div>
 
