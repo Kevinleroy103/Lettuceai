@@ -11,7 +11,9 @@ import {
   Cpu,
   Volume2,
   User,
+  Image,
 } from "lucide-react";
+import { DesignReferenceEditor } from "../../../components/DesignReferenceEditor";
 import type {
   CharacterMode,
   Model,
@@ -31,10 +33,16 @@ import {
 import { InteractionModeSelector } from "./InteractionModeSelector";
 
 interface DescriptionStepProps {
+  name: string;
+  avatarPath: string;
   definition: string;
   onDefinitionChange: (value: string) => void;
   description: string;
   onDescriptionChange: (value: string) => void;
+  designDescription: string;
+  onDesignDescriptionChange: (value: string) => void;
+  designReferenceImageIds: string[];
+  onDesignReferenceImageIdsChange: (value: string[]) => void;
   mode: CharacterMode;
   onModeChange: (value: CharacterMode) => void;
   models: Model[];
@@ -73,10 +81,16 @@ interface DescriptionStepProps {
 }
 
 export function DescriptionStep({
+  name,
+  avatarPath,
   definition,
   onDefinitionChange,
   description,
   onDescriptionChange,
+  designDescription,
+  onDesignDescriptionChange,
+  designReferenceImageIds,
+  onDesignReferenceImageIdsChange,
   mode,
   onModeChange,
   models,
@@ -285,6 +299,28 @@ export function DescriptionStep({
             <p className={cn(typography.bodySmall.size, "text-fg/40")}>
               Optional short description for the UI; the full definition is used in prompts.
             </p>
+          </div>
+
+          <div className={spacing.field}>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg border border-fg/10 bg-fg/5 p-1.5">
+                  <Image className="h-4 w-4 text-fg/60" />
+                </div>
+                <h3 className="text-sm font-semibold text-fg">Design references</h3>
+              </div>
+              <DesignReferenceEditor
+                designDescription={designDescription}
+                onDesignDescriptionChange={onDesignDescriptionChange}
+                referenceImages={designReferenceImageIds}
+                onReferenceImagesChange={onDesignReferenceImageIdsChange}
+                subjectName={name}
+                subjectDescription={definition || description}
+                avatarImage={avatarPath}
+                showHeader={false}
+                description="Attach a few stable image references and one concise visual note so scene generation keeps the same face, proportions, outfit cues, and style."
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

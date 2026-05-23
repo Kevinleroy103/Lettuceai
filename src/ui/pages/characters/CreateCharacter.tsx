@@ -205,6 +205,8 @@ export function CreateCharacterPage() {
       backgroundImagePath: state.backgroundImagePath,
       definition: state.definition,
       description: state.description,
+      designDescription: state.designDescription,
+      designReferenceImageIds: state.designReferenceImageIds,
       nickname: state.nickname,
       creator: state.creator,
       creatorNotes: state.creatorNotes,
@@ -260,6 +262,8 @@ export function CreateCharacterPage() {
     state.backgroundImagePath,
     state.definition,
     state.description,
+    state.designDescription,
+    state.designReferenceImageIds,
     state.nickname,
     state.creator,
     state.creatorNotes,
@@ -440,10 +444,16 @@ export function CreateCharacterPage() {
           ) : state.step === Step.Description ? (
             <DescriptionStep
               key="description"
+              name={state.name}
+              avatarPath={state.avatarPath}
               definition={state.definition}
               onDefinitionChange={actions.setDefinition}
               description={state.description}
               onDescriptionChange={actions.setDescription}
+              designDescription={state.designDescription}
+              onDesignDescriptionChange={actions.setDesignDescription}
+              designReferenceImageIds={state.designReferenceImageIds}
+              onDesignReferenceImageIdsChange={actions.setDesignReferenceImageIds}
               mode={state.mode}
               onModeChange={actions.setMode}
               models={state.models}
