@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, RefreshCw } from "lucide-react";
+import { X, RefreshCw, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import {
   createDefaultChatAppearanceSettings,
   mergeChatAppearance,
@@ -43,6 +43,21 @@ export function ChatAppearanceDrawer({
   setDraftOverride,
 }: ChatAppearanceDrawerProps) {
   const { t } = useI18n();
+  const [side, setSide] = useState<"left" | "right">(() => {
+    if (typeof window === "undefined") return "right";
+    return window.localStorage.getItem("chatAppearanceDrawer.side") === "left" ? "left" : "right";
+  });
+  const toggleSide = useCallback(() => {
+    setSide((prev) => {
+      const next = prev === "right" ? "left" : "right";
+      try {
+        window.localStorage.setItem("chatAppearanceDrawer.side", next);
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }, []);
   const [globalSettings, setGlobalSettings] = useState<ChatAppearanceSettings>(
     createDefaultChatAppearanceSettings(),
   );
@@ -197,32 +212,37 @@ export function ChatAppearanceDrawer({
     onClose();
   }, [isDirty, handleDiscard, handleSave, onClose]);
 
+  const isRight = side === "right";
+  const exitX = isRight ? "100%" : "-100%";
+
   return (
     <AnimatePresence>
       {open && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleCloseAttempt}
-          />
-          <motion.aside
-            className={cn(
-              "fixed top-0 right-0 z-50 flex h-full w-[400px] flex-col",
-              "border-l border-fg/10 bg-surface shadow-2xl",
-            )}
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          >
-            <header className="flex items-center justify-between border-b border-fg/10 px-4 py-3">
-              <div>
-                <div className="text-sm font-semibold text-fg">Chat Appearance</div>
-                <div className="text-[11px] text-fg/45">{character.name} only</div>
-              </div>
+        <motion.aside
+          className={cn(
+            "fixed top-0 z-50 flex h-full w-[400px] flex-col",
+            "bg-surface shadow-2xl",
+            isRight ? "right-0 border-l border-fg/10" : "left-0 border-r border-fg/10",
+          )}
+          initial={{ x: exitX }}
+          animate={{ x: 0 }}
+          exit={{ x: exitX }}
+          transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        >
+          <header className="flex items-center justify-between border-b border-fg/10 px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-fg">Chat Appearance</div>
+              <div className="text-[11px] text-fg/45">{character.name} only</div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleSide}
+                className="rounded-lg p-1.5 text-fg/50 hover:bg-fg/10 hover:text-fg"
+                aria-label={isRight ? "Move drawer to left" : "Move drawer to right"}
+              >
+                {isRight ? <PanelLeftOpen size={16} /> : <PanelRightOpen size={16} />}
+              </button>
               <button
                 type="button"
                 onClick={handleCloseAttempt}
@@ -231,7 +251,8 @@ export function ChatAppearanceDrawer({
               >
                 <X size={16} />
               </button>
-            </header>
+            </div>
+          </header>
 
             <div className="space-y-3 border-b border-fg/10 px-4 py-3">
               <AppearanceTabBar activeTab={activeTab} onChange={setActiveTab} />
@@ -284,9 +305,8 @@ export function ChatAppearanceDrawer({
               >
                 {isSaving ? "Saving..." : t("topNav.save")}
               </button>
-            </footer>
-          </motion.aside>
-        </>
+          </footer>
+        </motion.aside>
       )}
     </AnimatePresence>
   );
