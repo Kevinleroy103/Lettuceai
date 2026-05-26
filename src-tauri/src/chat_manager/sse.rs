@@ -549,37 +549,6 @@ fn extract_reasoning_from_value(v: &Value) -> Option<String> {
     None
 }
 
-#[cfg(test)]
-mod tests {
-    use super::SseDecoder;
-    use crate::chat_manager::types::NormalizedEvent;
-
-    #[test]
-    fn ollama_reasoning_stream_preserves_leading_spaces() {
-        let mut decoder = SseDecoder::new();
-
-        let first = decoder.feed(
-            "{\"message\":{\"thinking\":\"ThinkingProcess: 1.\"},\"done\":false}\n",
-            Some("ollama"),
-        );
-        let second = decoder.feed(
-            "{\"message\":{\"thinking\":\" Analyze the Request\"},\"done\":false}\n",
-            Some("ollama"),
-        );
-
-        assert_eq!(first.len(), 1);
-        match &first[0] {
-            NormalizedEvent::Reasoning { text } => assert_eq!(text, "ThinkingProcess: 1."),
-            other => panic!("unexpected first event: {other:?}"),
-        }
-
-        assert_eq!(second.len(), 1);
-        match &second[0] {
-            NormalizedEvent::Reasoning { text } => assert_eq!(text, " Analyze the Request"),
-            other => panic!("unexpected second event: {other:?}"),
-        }
-    }
-}
 
 fn extract_image_data_urls_from_value(v: &Value, out: &mut Vec<String>) {
     // OpenAI-style streaming: choices[].delta.images[].image_url.url

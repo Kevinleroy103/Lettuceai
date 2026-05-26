@@ -189,7 +189,7 @@ pub fn build_trace(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum TextPart {
+pub enum TextPart {
     Text(String),
     StressText { text: String, delta: i8 },
     Phonemes(String),
@@ -197,7 +197,7 @@ enum TextPart {
     Space,
 }
 
-fn split_text_parts(text: &str) -> Vec<TextPart> {
+pub fn split_text_parts(text: &str) -> Vec<TextPart> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut idx = 0usize;
@@ -247,7 +247,7 @@ fn split_text_parts(text: &str) -> Vec<TextPart> {
     parts
 }
 
-fn normalize_input_text(text: &str) -> String {
+pub fn normalize_input_text(text: &str) -> String {
     let cleaned = strip_inline_markdown(text);
     let mut normalized = String::with_capacity(cleaned.len());
     let mut prev_space = false;
@@ -768,7 +768,7 @@ fn normalize_ipa_output(ipa: &str) -> String {
         .join(" ")
 }
 
-fn apply_stress_delta(ipa: &str, delta: i8) -> String {
+pub fn apply_stress_delta(ipa: &str, delta: i8) -> String {
     if delta == 0 {
         return ipa.to_string();
     }
@@ -880,90 +880,3 @@ fn push_space_id(ids: &mut Vec<i64>, vocab: &HashMap<char, i64>) -> Option<i64> 
     None
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{apply_stress_delta, normalize_input_text, split_text_parts, TextPart};
-
-    #[test]
-    fn parses_inline_phoneme_annotations() {
-        let parts = split_text_parts("[Kokoro](/kˈOkəɹO/) is here.");
-        assert_eq!(
-            parts,
-            vec![
-                TextPart::Phonemes("kˈOkəɹO".to_string()),
-                TextPart::Space,
-                TextPart::Text("is".to_string()),
-                TextPart::Space,
-                TextPart::Text("here".to_string()),
-                TextPart::Punct('.'),
-            ]
-        );
-    }
-
-    #[test]
-    fn parses_inline_stress_annotations() {
-        let parts = split_text_parts("Try [or](+2) now.");
-        assert_eq!(
-            parts,
-            vec![
-                TextPart::Text("Try".to_string()),
-                TextPart::Space,
-                TextPart::StressText {
-                    text: "or".to_string(),
-                    delta: 2,
-                },
-                TextPart::Space,
-                TextPart::Text("now".to_string()),
-                TextPart::Punct('.'),
-            ]
-        );
-    }
-
-    #[test]
-    fn preserves_numeric_connectors() {
-        let parts = split_text_parts("82 million parameters.");
-        assert_eq!(
-            parts,
-            vec![
-                TextPart::Text("82".to_string()),
-                TextPart::Space,
-                TextPart::Text("million".to_string()),
-                TextPart::Space,
-                TextPart::Text("parameters".to_string()),
-                TextPart::Punct('.'),
-            ]
-        );
-    }
-
-    #[test]
-    fn raises_unstressed_segment() {
-        assert_eq!(apply_stress_delta("ɔɹ", 2), "ˈɔɹ");
-    }
-
-    #[test]
-    fn lowers_primary_stress() {
-        assert_eq!(apply_stress_delta("kˈOkəɹO", -1), "kˌOkəɹO");
-        assert_eq!(apply_stress_delta("kˈOkəɹO", -2), "kOkəɹO");
-    }
-
-    #[test]
-    fn strips_markdown_emphasis_markers() {
-        assert_eq!(
-            normalize_input_text("Oh you *love* these pancakes"),
-            "Oh you love these pancakes"
-        );
-        assert_eq!(
-            normalize_input_text("This is **very** good."),
-            "This is very good."
-        );
-    }
-
-    #[test]
-    fn preserves_non_markdown_asterisks_and_annotations() {
-        assert_eq!(normalize_input_text("2 * 3 = 6"), "2 * 3 = 6");
-        assert_eq!(
-            normalize_input_text("Try [or](+2) now."),
-            "Try [or](+2) now."
-        );
-    }
-}

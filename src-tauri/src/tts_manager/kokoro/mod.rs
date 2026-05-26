@@ -2,7 +2,7 @@ pub mod download;
 pub mod engine;
 mod lexicon;
 mod model;
-mod phonemizer;
+pub mod phonemizer;
 pub(crate) mod runtime;
 mod vocab;
 mod voices;

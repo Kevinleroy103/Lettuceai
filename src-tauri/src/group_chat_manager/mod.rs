@@ -7,7 +7,7 @@
 //! - Coordinating with the chat_manager for actual response generation
 //! - Full dynamic memory system support (decay, hot/cold, summarization, tool updates)
 
-mod selection;
+pub mod selection;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};

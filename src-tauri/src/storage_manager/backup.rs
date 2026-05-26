@@ -59,18 +59,18 @@ fn open_backup_file(_app: &tauri::AppHandle, path: &str) -> Result<File, String>
     }
 }
 
-const BACKUP_VERSION: u32 = 2;
+pub const BACKUP_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
-struct BackupManifest {
-    version: u32,
-    created_at: u64,
-    app_version: String,
-    encrypted: bool,
+pub struct BackupManifest {
+    pub version: u32,
+    pub created_at: u64,
+    pub app_version: String,
+    pub encrypted: bool,
     /// Salt used for key derivation (base64)
-    salt: Option<String>,
+    pub salt: Option<String>,
     /// Nonce used for encryption (base64)
-    nonce: Option<String>,
+    pub nonce: Option<String>,
 }
 
 /// Derive encryption key from password using BLAKE3
@@ -125,7 +125,7 @@ fn archive_name_targets_media(name: &str) -> bool {
         || normalized.starts_with("generated_images/")
 }
 
-fn require_encrypted_backup(manifest: &BackupManifest) -> Result<(), String> {
+pub fn require_encrypted_backup(manifest: &BackupManifest) -> Result<(), String> {
     if manifest.encrypted {
         Ok(())
     } else {
@@ -147,7 +147,7 @@ fn require_non_empty_password<'a>(
     Ok(password)
 }
 
-fn sanitize_media_archive_name(
+pub fn sanitize_media_archive_name(
     name: &str,
     strip_encryption_suffix: bool,
 ) -> Result<PathBuf, String> {
@@ -1773,7 +1773,7 @@ fn import_settings(app: &tauri::AppHandle, data: &JsonValue) -> Result<(), Strin
     Ok(())
 }
 
-fn disable_dynamic_memory_in_advanced_settings(settings: &mut serde_json::Value) {
+pub fn disable_dynamic_memory_in_advanced_settings(settings: &mut serde_json::Value) {
     let Some(obj) = settings.as_object_mut() else {
         *settings = serde_json::json!({
             "dynamicMemory": {
@@ -4054,77 +4054,6 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{disable_dynamic_memory_in_advanced_settings, sanitize_media_archive_name};
-    use std::path::PathBuf;
-
-    #[test]
-    fn sanitize_media_archive_name_accepts_safe_paths() {
-        assert_eq!(
-            sanitize_media_archive_name("images/example.png", false).unwrap(),
-            PathBuf::from("images/example.png")
-        );
-        assert_eq!(
-            sanitize_media_archive_name("images/example.png.enc", true).unwrap(),
-            PathBuf::from("images/example.png")
-        );
-        assert_eq!(
-            sanitize_media_archive_name("avatars/character-1/", false).unwrap(),
-            PathBuf::from("avatars/character-1")
-        );
-    }
-
-    #[test]
-    fn sanitize_media_archive_name_rejects_traversal() {
-        assert!(sanitize_media_archive_name("images/../../tmp/pwned", false).is_err());
-        assert!(sanitize_media_archive_name("images\\..\\..\\tmp\\pwned", false).is_err());
-        assert!(sanitize_media_archive_name("/tmp/pwned", false).is_err());
-    }
-
-    #[test]
-    fn require_encrypted_backup_rejects_plaintext_archives() {
-        let manifest = super::BackupManifest {
-            version: super::BACKUP_VERSION,
-            created_at: 0,
-            app_version: "test".to_string(),
-            encrypted: false,
-            salt: None,
-            nonce: None,
-        };
-
-        assert!(super::require_encrypted_backup(&manifest).is_err());
-    }
-
-    #[test]
-    fn disable_dynamic_memory_preserves_imported_settings() {
-        let mut settings = serde_json::json!({
-            "dynamicMemory": {
-                "enabled": true,
-                "summaryMessageInterval": 42,
-                "maxEntries": 99,
-                "retrievalLimit": 7,
-                "contextEnrichmentEnabled": false
-            },
-            "groupDynamicMemory": {
-                "enabled": true,
-                "summaryMessageInterval": 11
-            }
-        });
-
-        disable_dynamic_memory_in_advanced_settings(&mut settings);
-
-        assert_eq!(
-            settings["dynamicMemory"]["enabled"],
-            serde_json::Value::Bool(false)
-        );
-        assert_eq!(settings["dynamicMemory"]["summaryMessageInterval"], 42);
-        assert_eq!(settings["dynamicMemory"]["maxEntries"], 99);
-        assert_eq!(settings["dynamicMemory"]["retrievalLimit"], 7);
-        assert_eq!(settings["dynamicMemory"]["contextEnrichmentEnabled"], false);
-        assert_eq!(settings["groupDynamicMemory"]["enabled"], true);
-    }
-}
 
 /// List available backups in downloads directory
 #[tauri::command]

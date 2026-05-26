@@ -12,7 +12,7 @@ pub struct StoredImageInfo {
     pub mime_type: String,
 }
 
-fn validate_simple_id<'a>(value: &'a str, field: &str) -> Result<&'a str, String> {
+pub fn validate_simple_id<'a>(value: &'a str, field: &str) -> Result<&'a str, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(crate::utils::err_msg(
@@ -36,7 +36,7 @@ fn validate_simple_id<'a>(value: &'a str, field: &str) -> Result<&'a str, String
     Ok(trimmed)
 }
 
-fn validate_single_component<'a>(
+pub fn validate_single_component<'a>(
     value: &'a str,
     field: &str,
     allow_dots: bool,
@@ -83,7 +83,7 @@ fn validate_single_component<'a>(
     Ok(trimmed)
 }
 
-fn validate_avatar_filename(filename: &str) -> Result<&str, String> {
+pub fn validate_avatar_filename(filename: &str) -> Result<&str, String> {
     let filename = validate_single_component(filename, "avatar filename", true)?;
     let path = PathBuf::from(filename);
     if !is_supported_image_file(&path) {
@@ -1432,32 +1432,6 @@ fn calculate_text_colors(colors: &[GradientColor]) -> (String, String) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{validate_avatar_filename, validate_simple_id, validate_single_component};
-
-    #[test]
-    fn validate_simple_id_rejects_traversal() {
-        assert!(validate_simple_id("../escape", "id").is_err());
-        assert!(validate_simple_id("nested/path", "id").is_err());
-        assert!(validate_simple_id("", "id").is_err());
-    }
-
-    #[test]
-    fn validate_avatar_filename_requires_single_supported_file() {
-        assert!(validate_avatar_filename("avatar_base.webp").is_ok());
-        assert!(validate_avatar_filename("../avatar_base.webp").is_err());
-        assert!(validate_avatar_filename("nested/avatar_base.webp").is_err());
-        assert!(validate_avatar_filename("avatar_base.txt").is_err());
-    }
-
-    #[test]
-    fn validate_single_component_rejects_path_segments() {
-        assert!(validate_single_component("../../x", "file", true).is_err());
-        assert!(validate_single_component("/tmp/x", "file", true).is_err());
-        assert!(validate_single_component("ok-name.png", "file", true).is_ok());
-    }
-}
 
 fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
     let r = r as f64 / 255.0;

@@ -269,13 +269,13 @@ pub(crate) fn visible_chat_system_instruction_text(message: &Value) -> Option<St
 }
 
 mod anannas;
-mod anthropic;
+pub mod anthropic;
 mod automatic1111;
 mod cerebras;
 mod chutes;
 mod deepseek;
 mod featherless;
-mod google_gemini;
+pub mod google_gemini;
 mod groq;
 mod intenserp;
 mod llamacpp;

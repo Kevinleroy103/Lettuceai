@@ -5,7 +5,7 @@ use tauri::AppHandle;
 use tokio::sync::Mutex as TokioMutex;
 
 mod benchmark;
-mod download;
+pub mod download;
 pub(crate) mod emotion;
 mod inference;
 mod layout;

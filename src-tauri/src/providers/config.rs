@@ -241,32 +241,3 @@ pub fn get_system_role(provider_id: &ProviderId) -> Cow<'static, str> {
     adapter_for(&cred).system_role()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_resolve_base_url_with_custom() {
-        let result = resolve_base_url(&ProviderId("openai".into()), Some("https://custom.com"));
-        assert_eq!(result, "https://custom.com");
-    }
-
-    #[test]
-    fn test_resolve_base_url_default() {
-        let result = resolve_base_url(&ProviderId("openai".into()), None);
-        assert_eq!(result, "https://api.openai.com");
-    }
-
-    #[test]
-    fn test_build_endpoint_url() {
-        let result = build_endpoint_url(&ProviderId("openai".into()), None);
-        assert_eq!(result, "https://api.openai.com/v1/chat/completions");
-    }
-
-    #[test]
-    fn test_build_endpoint_url_with_v1_already_in_base() {
-        let result =
-            build_endpoint_url(&ProviderId("openai".into()), Some("https://custom.com/v1"));
-        assert_eq!(result, "https://custom.com/v1/chat/completions");
-    }
-}

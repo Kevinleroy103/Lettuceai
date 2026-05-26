@@ -4,40 +4,40 @@ use crate::chat_manager::types::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct PromptEntryConditionContext<'a> {
-    pub(crate) chat_mode: PromptEntryChatMode,
-    pub(crate) info_source: PromptEntryInfoSource,
-    pub(crate) scene_generation_enabled: bool,
-    pub(crate) avatar_generation_enabled: bool,
-    pub(crate) has_scene: bool,
-    pub(crate) has_scene_direction: bool,
-    pub(crate) has_persona: bool,
-    pub(crate) message_count: usize,
-    pub(crate) participant_count: usize,
-    pub(crate) recent_text: &'a str,
-    pub(crate) dynamic_memory_enabled: bool,
-    pub(crate) has_memory_summary: bool,
-    pub(crate) has_key_memories: bool,
-    pub(crate) has_lorebook_content: bool,
-    pub(crate) does_author_note_exists: bool,
-    pub(crate) has_active_scheduled_note: bool,
-    pub(crate) has_subject_description: bool,
-    pub(crate) has_current_description: bool,
-    pub(crate) has_character_reference_images: bool,
-    pub(crate) has_chat_background: bool,
-    pub(crate) has_persona_reference_images: bool,
-    pub(crate) has_character_reference_text: bool,
-    pub(crate) has_persona_reference_text: bool,
-    pub(crate) input_scopes: &'a [String],
-    pub(crate) output_scopes: &'a [String],
-    pub(crate) provider_id: Option<&'a str>,
-    pub(crate) reasoning_enabled: bool,
-    pub(crate) vision_enabled: bool,
-    pub(crate) time_awareness_enabled: bool,
-    pub(crate) companion_mode_enabled: bool,
+pub struct PromptEntryConditionContext<'a> {
+    pub chat_mode: PromptEntryChatMode,
+    pub info_source: PromptEntryInfoSource,
+    pub scene_generation_enabled: bool,
+    pub avatar_generation_enabled: bool,
+    pub has_scene: bool,
+    pub has_scene_direction: bool,
+    pub has_persona: bool,
+    pub message_count: usize,
+    pub participant_count: usize,
+    pub recent_text: &'a str,
+    pub dynamic_memory_enabled: bool,
+    pub has_memory_summary: bool,
+    pub has_key_memories: bool,
+    pub has_lorebook_content: bool,
+    pub does_author_note_exists: bool,
+    pub has_active_scheduled_note: bool,
+    pub has_subject_description: bool,
+    pub has_current_description: bool,
+    pub has_character_reference_images: bool,
+    pub has_chat_background: bool,
+    pub has_persona_reference_images: bool,
+    pub has_character_reference_text: bool,
+    pub has_persona_reference_text: bool,
+    pub input_scopes: &'a [String],
+    pub output_scopes: &'a [String],
+    pub provider_id: Option<&'a str>,
+    pub reasoning_enabled: bool,
+    pub vision_enabled: bool,
+    pub time_awareness_enabled: bool,
+    pub companion_mode_enabled: bool,
 }
 
-pub(crate) fn entry_is_active(
+pub fn entry_is_active(
     entry: &SystemPromptEntry,
     context: &PromptEntryConditionContext<'_>,
 ) -> bool {
@@ -52,7 +52,7 @@ pub(crate) fn entry_is_active(
         .unwrap_or(true)
 }
 
-pub(crate) fn matches_condition(
+pub fn matches_condition(
     condition: &PromptEntryCondition,
     context: &PromptEntryConditionContext<'_>,
 ) -> bool {
@@ -180,111 +180,3 @@ fn scope_list_match_any(values: &[String], scopes: &[String]) -> bool {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sample_context<'a>() -> PromptEntryConditionContext<'a> {
-        let input_scopes = Box::leak(Box::new(vec!["text".to_string(), "image".to_string()]));
-        let output_scopes = Box::leak(Box::new(vec!["text".to_string()]));
-        PromptEntryConditionContext {
-            chat_mode: PromptEntryChatMode::Group,
-            info_source: PromptEntryInfoSource::Messages,
-            scene_generation_enabled: true,
-            avatar_generation_enabled: true,
-            has_scene: true,
-            has_scene_direction: false,
-            has_persona: true,
-            message_count: 12,
-            participant_count: 4,
-            recent_text: "The sunset beach scene has four people talking about dinner.",
-            dynamic_memory_enabled: true,
-            has_memory_summary: true,
-            has_key_memories: false,
-            has_lorebook_content: true,
-            does_author_note_exists: true,
-            has_active_scheduled_note: false,
-            has_subject_description: false,
-            has_current_description: false,
-            has_character_reference_images: false,
-            has_chat_background: false,
-            has_persona_reference_images: false,
-            has_character_reference_text: false,
-            has_persona_reference_text: false,
-            input_scopes,
-            output_scopes,
-            provider_id: Some("openai"),
-            reasoning_enabled: true,
-            vision_enabled: true,
-            time_awareness_enabled: false,
-            companion_mode_enabled: false,
-        }
-    }
-
-    #[test]
-    fn matches_nested_conditions() {
-        let condition = PromptEntryCondition::All {
-            conditions: vec![
-                PromptEntryCondition::ChatMode {
-                    value: PromptEntryChatMode::Group,
-                },
-                PromptEntryCondition::Any {
-                    conditions: vec![
-                        PromptEntryCondition::KeywordAny {
-                            values: vec!["sunset".to_string()],
-                        },
-                        PromptEntryCondition::KeywordAny {
-                            values: vec!["rain".to_string()],
-                        },
-                    ],
-                },
-                PromptEntryCondition::Not {
-                    condition: Box::new(PromptEntryCondition::HasKeyMemories { value: true }),
-                },
-            ],
-        };
-
-        assert!(matches_condition(&condition, &sample_context()));
-    }
-
-    #[test]
-    fn matches_scope_conditions_case_insensitively() {
-        let condition = PromptEntryCondition::InputScopeAny {
-            values: vec!["IMAGE".to_string()],
-        };
-
-        assert!(matches_condition(&condition, &sample_context()));
-    }
-
-    #[test]
-    fn matches_time_awareness_condition() {
-        let mut context = sample_context();
-        context.time_awareness_enabled = true;
-
-        let condition = PromptEntryCondition::IsTimeAwarenessEnabled { value: true };
-
-        assert!(matches_condition(&condition, &context));
-    }
-
-    #[test]
-    fn matches_companion_mode_condition() {
-        let mut context = sample_context();
-        context.companion_mode_enabled = true;
-
-        let condition = PromptEntryCondition::IsCompanionMode { value: true };
-
-        assert!(matches_condition(&condition, &context));
-    }
-
-    #[test]
-    fn active_scheduled_note_condition_only_matches_in_companion_mode() {
-        let mut context = sample_context();
-        context.has_active_scheduled_note = true;
-
-        let condition = PromptEntryCondition::HasActiveScheduledNote { value: true };
-        assert!(!matches_condition(&condition, &context));
-
-        context.companion_mode_enabled = true;
-        assert!(matches_condition(&condition, &context));
-    }
-}

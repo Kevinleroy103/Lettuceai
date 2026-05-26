@@ -180,19 +180,3 @@ pub fn extract_error_message(payload: &Value) -> Option<String> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use reqwest::header::AUTHORIZATION;
-
-    #[test]
-    fn featherless_uses_standard_authorization_header() {
-        let headers = build_headers(&ProviderId("featherless".into()), "test-key").unwrap();
-
-        assert_eq!(
-            headers.get(AUTHORIZATION).unwrap(),
-            &HeaderValue::from_static("Bearer test-key")
-        );
-        assert!(headers.get("authentication").is_none());
-    }
-}

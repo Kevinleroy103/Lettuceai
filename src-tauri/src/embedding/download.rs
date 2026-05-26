@@ -24,7 +24,7 @@ pub async fn reset_download_state() {
     };
 }
 
-fn apply_embedding_version_preference(
+pub fn apply_embedding_version_preference(
     advanced_settings: &mut serde_json::Value,
     version: &str,
 ) -> Result<(), String> {
@@ -447,38 +447,6 @@ pub async fn start_embedding_download(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::apply_embedding_version_preference;
-
-    #[test]
-    fn sets_embedding_version_preference_in_advanced_settings() {
-        let mut advanced = serde_json::json!({
-            "embeddingMaxTokens": 2048
-        });
-
-        apply_embedding_version_preference(&mut advanced, "v4").expect("should update settings");
-
-        assert_eq!(
-            advanced.get("embeddingModelVersion"),
-            Some(&serde_json::json!("v4"))
-        );
-        assert_eq!(
-            advanced.get("embeddingMaxTokens"),
-            Some(&serde_json::json!(2048))
-        );
-    }
-
-    #[test]
-    fn rejects_non_object_advanced_settings() {
-        let mut advanced = serde_json::json!(null);
-
-        let err = apply_embedding_version_preference(&mut advanced, "v4")
-            .expect_err("non-object settings should fail");
-
-        assert!(err.contains("Advanced settings payload is not an object"));
-    }
-}
 
 pub async fn start_companion_download(app: AppHandle, kind: String) -> Result<(), String> {
     let kind = CompanionKind::from_str(&kind).ok_or_else(|| {
