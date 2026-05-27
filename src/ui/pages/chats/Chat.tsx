@@ -66,6 +66,8 @@ import {
 } from "./components";
 import { ChatAppearanceDrawer } from "./components/appearance/ChatAppearanceDrawer";
 import { getChatColumnLayout } from "./utils/chatColumnLayout";
+import { getChatWidgetLayout, useViewportWidth } from "./utils/chatWidgetLayout";
+import { ChatWidgetArea } from "./components/ChatWidgetArea";
 import { BottomMenu, GuidedTour, MenuButton, useGuidedTour } from "../../components";
 import { AvatarImage } from "../../components/AvatarImage";
 import { useAvatar } from "../../hooks/useAvatar";
@@ -150,6 +152,10 @@ export function ChatConversationPage() {
     reloadCharacter,
   } = useChatLayoutContext();
   const [appearanceDrawerOpen, setAppearanceDrawerOpen] = useState(false);
+  const viewportWidth = useViewportWidth();
+  const widgetLayout = getChatWidgetLayout(chatAppearance, viewportWidth);
+  const effectiveFullShell =
+    chatAppearance.chatColumnFullShell || widgetLayout.enabled;
 
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const pressStartPosition = useRef<{ x: number; y: number } | null>(null);
@@ -2147,10 +2153,11 @@ export function ChatConversationPage() {
         )}
       </AnimatePresence>
 
+      <ChatWidgetArea widgetLayout={widgetLayout}>
       {/* Header */}
       <div
-        className={`relative z-20 ${chatAppearance.chatColumnFullShell ? getChatColumnLayout(chatAppearance).className : ""}`}
-        style={chatAppearance.chatColumnFullShell ? getChatColumnLayout(chatAppearance).style : undefined}
+        className={`relative z-20 ${effectiveFullShell ? getChatColumnLayout(chatAppearance).className : ""}`}
+        style={effectiveFullShell ? getChatColumnLayout(chatAppearance).style : undefined}
       >
         <ChatHeader
           character={character}
@@ -2352,10 +2359,10 @@ export function ChatConversationPage() {
 
       {/* Footer */}
       <div
-        className={`relative z-10 ${chatAppearance.chatColumnFullShell ? getChatColumnLayout(chatAppearance).className : ""}`}
+        className={`relative z-10 ${effectiveFullShell ? getChatColumnLayout(chatAppearance).className : ""}`}
         style={{
           paddingBottom: footerBottomOffset,
-          ...(chatAppearance.chatColumnFullShell ? getChatColumnLayout(chatAppearance).style : {}),
+          ...(effectiveFullShell ? getChatColumnLayout(chatAppearance).style : {}),
         }}
       >
         <ChatFooter
@@ -2401,6 +2408,7 @@ export function ChatConversationPage() {
           textareaRef={footerTextareaRef}
         />
       </div>
+      </ChatWidgetArea>
 
       <MessageActionsBottomSheet
         messageAction={messageAction}

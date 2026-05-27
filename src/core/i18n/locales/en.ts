@@ -3189,6 +3189,11 @@ export const enMessages = {
         fullShell: "Move Full Shell",
         fullShellDesc:
           "Move the header and input area along with the messages column.",
+        widgetArea: "Widget Area",
+        widgetAreaDesc:
+          "Show side panels for widgets in the empty space around the messages column. Needs extra room on the desktop.",
+        fullShellLockedByWidgets:
+          "Move Full Shell is on because Widget Area is enabled.",
       },
     },
     avatar: {

@@ -2735,6 +2735,17 @@ export const ChatAppearanceSettingsSchema = z.object({
   chatColumnAlign: z.enum(["left", "center", "right"]).default("center"),
   chatColumnFullShell: z.boolean().default(false),
 
+  // Widget area — desktop panels flanking the messages column when there is
+  // spare horizontal room. Slot contents stay empty for now; future work will
+  // introduce widget nodes and organizers (dividers, rows, etc.).
+  chatWidgetAreaEnabled: z.boolean().default(false),
+  chatWidgetSlots: z
+    .object({
+      left: z.array(z.unknown()).default([]),
+      right: z.array(z.unknown()).default([]),
+    })
+    .default({ left: [], right: [] }),
+
   // Bubble colors (token names)
   userBubbleColor: z.enum(["accent", "info", "secondary", "warning"]).default("accent"),
   assistantBubbleColor: z.enum(["neutral", "accent", "info", "secondary"]).default("neutral"),
@@ -2776,6 +2787,8 @@ export function createDefaultChatAppearanceSettings(): ChatAppearanceSettings {
     chatColumnWidthPx: undefined,
     chatColumnAlign: "center",
     chatColumnFullShell: false,
+    chatWidgetAreaEnabled: false,
+    chatWidgetSlots: { left: [], right: [] },
     userBubbleColor: "accent",
     assistantBubbleColor: "neutral",
     userBubbleColorHex: undefined,

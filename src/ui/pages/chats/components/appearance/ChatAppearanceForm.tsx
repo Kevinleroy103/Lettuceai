@@ -3,6 +3,7 @@ import { RotateCcw } from "lucide-react";
 import type { ChatAppearanceSettings } from "../../../../../core/storage/schemas";
 import { cn } from "../../../../design-tokens";
 import { Switch } from "../../../../components/Switch";
+import { NumberInput } from "../../../../components/NumberInput";
 import { normalizeHexColor } from "../../../../../core/utils/imageAnalysis";
 import { useI18n } from "../../../../../core/i18n/context";
 
@@ -217,6 +218,7 @@ interface ToggleControlProps {
   onChange: (next: boolean) => void;
   overridden?: boolean;
   onReset?: () => void;
+  disabled?: boolean;
 }
 
 function ToggleControl({
@@ -226,6 +228,7 @@ function ToggleControl({
   onChange,
   overridden,
   onReset,
+  disabled,
 }: ToggleControlProps) {
   return (
     <div className="space-y-2">
@@ -245,7 +248,7 @@ function ToggleControl({
               Reset
             </button>
           )}
-          <Switch checked={checked} onChange={onChange} aria-label={label} />
+          <Switch checked={checked} onChange={onChange} disabled={disabled} aria-label={label} />
         </div>
       </div>
     </div>
@@ -437,17 +440,14 @@ export function ChatAppearanceForm({
                 </button>
               )}
             </div>
-            <input
-              type="number"
+            <NumberInput
               min={400}
               max={2400}
               step={10}
               value={settings.chatColumnWidthPx ?? 800}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                if (!Number.isFinite(raw)) return;
-                const clamped = Math.min(2400, Math.max(400, Math.round(raw)));
-                onUpdate("chatColumnWidthPx", clamped);
+              onChange={(next) => {
+                if (next == null) return;
+                onUpdate("chatColumnWidthPx", next);
               }}
               className={cn(
                 "w-full rounded-lg border border-fg/10 bg-fg/5 px-3 py-2 text-sm text-fg/80",
@@ -471,11 +471,27 @@ export function ChatAppearanceForm({
         <ToggleControl
           label={t("chatAppearance.layout.chatColumn.fullShell")}
           description={t("chatAppearance.layout.chatColumn.fullShellDesc")}
-          checked={settings.chatColumnFullShell}
+          checked={settings.chatColumnFullShell || settings.chatWidgetAreaEnabled}
           onChange={(v) => onUpdate("chatColumnFullShell", v)}
           overridden={isOverridden("chatColumnFullShell")}
           onReset={resetFor("chatColumnFullShell")}
+          disabled={settings.chatWidgetAreaEnabled}
         />
+        {settings.chatWidgetAreaEnabled && (
+          <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] text-accent/80">
+            {t("chatAppearance.layout.chatColumn.fullShellLockedByWidgets")}
+          </div>
+        )}
+        {settings.chatColumnWidth !== "full" && (
+          <ToggleControl
+            label={t("chatAppearance.layout.chatColumn.widgetArea")}
+            description={t("chatAppearance.layout.chatColumn.widgetAreaDesc")}
+            checked={settings.chatWidgetAreaEnabled}
+            onChange={(v) => onUpdate("chatWidgetAreaEnabled", v)}
+            overridden={isOverridden("chatWidgetAreaEnabled")}
+            onReset={resetFor("chatWidgetAreaEnabled")}
+          />
+        )}
         </div>
       </div>
     );
