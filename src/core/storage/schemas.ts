@@ -2726,6 +2726,15 @@ export const ChatAppearanceSettingsSchema = z.object({
   avatarShape: z.enum(["circle", "rounded", "hidden"]).default("circle"),
   avatarSize: z.enum(["small", "medium", "large"]).default("medium"),
 
+  // Chat column (desktop layout) — controls max width and alignment of the
+  // messages column, and optionally the surrounding header + footer.
+  chatColumnWidth: z
+    .enum(["narrow", "normal", "wide", "xl", "full", "custom"])
+    .default("full"),
+  chatColumnWidthPx: z.number().int().min(400).max(2400).optional(),
+  chatColumnAlign: z.enum(["left", "center", "right"]).default("center"),
+  chatColumnFullShell: z.boolean().default(false),
+
   // Bubble colors (token names)
   userBubbleColor: z.enum(["accent", "info", "secondary", "warning"]).default("accent"),
   assistantBubbleColor: z.enum(["neutral", "accent", "info", "secondary"]).default("neutral"),
@@ -2763,6 +2772,10 @@ export function createDefaultChatAppearanceSettings(): ChatAppearanceSettings {
     messageGap: "relaxed",
     avatarShape: "circle",
     avatarSize: "medium",
+    chatColumnWidth: "full",
+    chatColumnWidthPx: undefined,
+    chatColumnAlign: "center",
+    chatColumnFullShell: false,
     userBubbleColor: "accent",
     assistantBubbleColor: "neutral",
     userBubbleColorHex: undefined,
