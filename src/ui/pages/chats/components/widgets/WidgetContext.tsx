@@ -11,6 +11,9 @@ export interface WidgetActionContext {
   persona: Persona | null;
   session: Session | null;
   hasBackground: boolean;
+  messageCount: number;
+  sceneName: string | null;
+  memories: string[];
   personas: Persona[];
   models: Model[];
   currentModelId: string | null;
@@ -34,6 +37,8 @@ export interface WidgetActionContext {
   onOpenSearch: () => void;
   onToggleVoiceAutoplay: () => void | Promise<void>;
   onUpdateScratchPad: (nodeId: string, content: string) => void | Promise<void>;
+  onUpdateNode: (nodeId: string, patch: Record<string, unknown>) => void | Promise<void>;
+  onInsertText: (text: string) => void;
 }
 
 const WidgetContext = createContext<WidgetActionContext | null>(null);

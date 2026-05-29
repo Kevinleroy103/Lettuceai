@@ -86,6 +86,55 @@ export interface ButtonNode extends NodeBase {
   description?: string;
 }
 
+export interface StatItem {
+  id: string;
+  label: string;
+  value: number;
+}
+
+export interface StatTrackerNode extends NodeBase {
+  type: "stat_tracker";
+  title?: string;
+  description?: string;
+  stats: StatItem[];
+}
+
+export interface SnippetItem {
+  id: string;
+  label: string;
+  text: string;
+}
+
+export interface QuickSnippetsNode extends NodeBase {
+  type: "quick_snippets";
+  title?: string;
+  description?: string;
+  snippets: SnippetItem[];
+}
+
+export interface DiceNode extends NodeBase {
+  type: "dice";
+  title?: string;
+  description?: string;
+  notation?: string;
+}
+
+export interface MemoryNode extends NodeBase {
+  type: "memory";
+  title?: string;
+  limit?: number;
+}
+
+export interface CompanionStateNode extends NodeBase {
+  type: "companion_state";
+  title?: string;
+}
+
+export interface SessionInfoNode extends NodeBase {
+  type: "session_info";
+  title?: string;
+}
+
 export type WidgetNode =
   | DividerNode
   | BoxNode
@@ -94,7 +143,13 @@ export type WidgetNode =
   | ScratchPadNode
   | ImageNode
   | SelectorNode
-  | ButtonNode;
+  | ButtonNode
+  | StatTrackerNode
+  | QuickSnippetsNode
+  | DiceNode
+  | MemoryNode
+  | CompanionStateNode
+  | SessionInfoNode;
 
 const imageSourceSchema: z.ZodType<ImageSource> = z.union([
   z.object({ kind: z.literal("character_avatar") }),
@@ -174,6 +229,65 @@ export const widgetNodeSchema: z.ZodType<WidgetNode> = z.lazy(() =>
       ]),
       title: z.string().optional(),
       description: z.string().optional(),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("stat_tracker"),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      stats: z
+        .array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            value: z.number(),
+          }),
+        )
+        .default([]),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("quick_snippets"),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      snippets: z
+        .array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            text: z.string(),
+          }),
+        )
+        .default([]),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("dice"),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      notation: z.string().optional(),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("memory"),
+      title: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("companion_state"),
+      title: z.string().optional(),
+    }),
+    z.object({
+      id: z.string(),
+      design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
+      type: z.literal("session_info"),
+      title: z.string().optional(),
     }),
   ]),
 );

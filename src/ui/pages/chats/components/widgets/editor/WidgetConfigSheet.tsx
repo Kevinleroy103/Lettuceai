@@ -1,25 +1,31 @@
 import { useEffect, useRef, useState } from "react";
-import { Image as ImageIcon, ImagePlus, Loader2, Upload } from "lucide-react";
+import { Image as ImageIcon, ImagePlus, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { BottomMenu } from "../../../../../components";
 import type {
   BoxNode,
   BoxVariant,
   ButtonAction,
   ButtonNode,
+  DiceNode,
   DividerNode,
   ImageNode,
   ImageShape,
   ImageSource,
+  QuickSnippetsNode,
   ScratchPadNode,
   SelectorKind,
   SelectorNode,
+  StatTrackerNode,
   WidgetDesign,
   WidgetNode,
 } from "../../../../../../core/storage/chatWidgetSchemas";
 import { convertToImageRef } from "../../../../../../core/storage/images";
+import { uuidv4 } from "../../../../../../core/storage/repo";
 import { useImageData } from "../../../../../hooks/useImageData";
 import { WIDGET_TYPE_LABEL } from "./widgetFactories";
 import { useWidgetEdit } from "../WidgetEditContext";
+
+const makeId = () => uuidv4();
 
 interface FieldProps {
   label: string;
@@ -214,7 +220,247 @@ function renderBody(
           {design}
         </>
       );
+    case "stat_tracker":
+      return (
+        <>
+          <StatTrackerForm node={draft} setNode={setDraft} />
+          {design}
+        </>
+      );
+    case "quick_snippets":
+      return (
+        <>
+          <QuickSnippetsForm node={draft} setNode={setDraft} />
+          {design}
+        </>
+      );
+    case "dice":
+      return (
+        <>
+          <DiceForm node={draft} setNode={setDraft} />
+          {design}
+        </>
+      );
+    case "memory":
+      return (
+        <>
+          <TitleOnlyForm node={draft} setNode={setDraft} />
+          <Field label="Max entries shown" hint="Most recent memories to display.">
+            <input
+              type="number"
+              min={1}
+              max={100}
+              className={TEXT_INPUT_CLASS}
+              value={draft.limit ?? 10}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setDraft({ ...draft, limit: Number.isFinite(n) ? n : undefined });
+              }}
+            />
+          </Field>
+          {design}
+        </>
+      );
+    case "companion_state":
+    case "session_info":
+      return (
+        <>
+          <TitleOnlyForm node={draft} setNode={setDraft} />
+          {design}
+        </>
+      );
   }
+}
+
+function TitleOnlyForm({
+  node,
+  setNode,
+}: {
+  node: WidgetNode & { title?: string };
+  setNode: (n: WidgetNode) => void;
+}) {
+  return (
+    <Field label="Title (optional)">
+      <input
+        type="text"
+        className={TEXT_INPUT_CLASS}
+        value={node.title ?? ""}
+        onChange={(e) => setNode({ ...node, title: e.target.value } as WidgetNode)}
+      />
+    </Field>
+  );
+}
+
+function StatTrackerForm({
+  node,
+  setNode,
+}: {
+  node: StatTrackerNode;
+  setNode: (n: StatTrackerNode) => void;
+}) {
+  const updateStat = (id: string, patch: Partial<{ label: string; value: number }>) =>
+    setNode({
+      ...node,
+      stats: node.stats.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    });
+  return (
+    <>
+      <Field label="Title (optional)">
+        <input
+          type="text"
+          className={TEXT_INPUT_CLASS}
+          value={node.title ?? ""}
+          onChange={(e) => setNode({ ...node, title: e.target.value })}
+        />
+      </Field>
+      <Field label="Stats">
+        <div className="flex flex-col gap-2">
+          {node.stats.map((stat) => (
+            <div key={stat.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Label"
+                className={`${TEXT_INPUT_CLASS} flex-1`}
+                value={stat.label}
+                onChange={(e) => updateStat(stat.id, { label: e.target.value })}
+              />
+              <input
+                type="number"
+                className={`${TEXT_INPUT_CLASS} w-20`}
+                value={stat.value}
+                onChange={(e) => updateStat(stat.id, { value: Number(e.target.value) || 0 })}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setNode({ ...node, stats: node.stats.filter((s) => s.id !== stat.id) })
+                }
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-fg/15 bg-fg/5 text-fg/50 hover:border-danger/40 hover:text-danger"
+                aria-label="Remove stat"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setNode({
+                ...node,
+                stats: [...node.stats, { id: makeId(), label: "Stat", value: 0 }],
+              })
+            }
+            className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-fg/20 py-1.5 text-[11px] font-medium text-fg/60 hover:border-accent/40 hover:text-accent"
+          >
+            <Plus size={12} strokeWidth={2.4} /> Add stat
+          </button>
+        </div>
+      </Field>
+    </>
+  );
+}
+
+function QuickSnippetsForm({
+  node,
+  setNode,
+}: {
+  node: QuickSnippetsNode;
+  setNode: (n: QuickSnippetsNode) => void;
+}) {
+  const updateSnippet = (id: string, patch: Partial<{ label: string; text: string }>) =>
+    setNode({
+      ...node,
+      snippets: node.snippets.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    });
+  return (
+    <>
+      <Field label="Title (optional)">
+        <input
+          type="text"
+          className={TEXT_INPUT_CLASS}
+          value={node.title ?? ""}
+          onChange={(e) => setNode({ ...node, title: e.target.value })}
+        />
+      </Field>
+      <Field label="Snippets">
+        <div className="flex flex-col gap-2">
+          {node.snippets.map((snippet) => (
+            <div key={snippet.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Label"
+                className={`${TEXT_INPUT_CLASS} w-24 shrink-0`}
+                value={snippet.label}
+                onChange={(e) => updateSnippet(snippet.id, { label: e.target.value })}
+              />
+              <input
+                type="text"
+                placeholder="Inserted text"
+                className={`${TEXT_INPUT_CLASS} flex-1`}
+                value={snippet.text}
+                onChange={(e) => updateSnippet(snippet.id, { text: e.target.value })}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setNode({
+                    ...node,
+                    snippets: node.snippets.filter((s) => s.id !== snippet.id),
+                  })
+                }
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-fg/15 bg-fg/5 text-fg/50 hover:border-danger/40 hover:text-danger"
+                aria-label="Remove snippet"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setNode({
+                ...node,
+                snippets: [...node.snippets, { id: makeId(), label: "New", text: "" }],
+              })
+            }
+            className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-fg/20 py-1.5 text-[11px] font-medium text-fg/60 hover:border-accent/40 hover:text-accent"
+          >
+            <Plus size={12} strokeWidth={2.4} /> Add snippet
+          </button>
+        </div>
+      </Field>
+    </>
+  );
+}
+
+function DiceForm({
+  node,
+  setNode,
+}: {
+  node: DiceNode;
+  setNode: (n: DiceNode) => void;
+}) {
+  return (
+    <>
+      <Field label="Title (optional)">
+        <input
+          type="text"
+          className={TEXT_INPUT_CLASS}
+          value={node.title ?? ""}
+          onChange={(e) => setNode({ ...node, title: e.target.value })}
+        />
+      </Field>
+      <Field label="Notation" hint="e.g. 1d20, 2d6+3">
+        <input
+          type="text"
+          className={TEXT_INPUT_CLASS}
+          value={node.notation ?? ""}
+          placeholder="1d20"
+          onChange={(e) => setNode({ ...node, notation: e.target.value })}
+        />
+      </Field>
+    </>
+  );
 }
 
 function DividerForm({

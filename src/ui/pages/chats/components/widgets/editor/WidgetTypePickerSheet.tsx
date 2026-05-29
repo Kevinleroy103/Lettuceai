@@ -1,15 +1,22 @@
 import {
   ArrowLeftRight,
   Box as BoxIcon,
+  Brain,
+  Dices,
+  Gauge,
   Image as ImageIcon,
+  Info,
   ListChecks,
   Minus,
   NotebookPen,
+  Sparkles,
   User,
   UserCircle,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BottomMenu, MenuButton } from "../../../../../components";
+import { useWidgetContext } from "../WidgetContext";
 import {
   WIDGET_TYPE_DESC,
   WIDGET_TYPE_LABEL,
@@ -19,7 +26,13 @@ import {
 const TYPE_ORDER: WidgetType[] = [
   "character_info",
   "persona_info",
+  "companion_state",
+  "memory",
+  "stat_tracker",
   "scratch_pad",
+  "quick_snippets",
+  "dice",
+  "session_info",
   "selector",
   "button",
   "image",
@@ -36,6 +49,12 @@ const TYPE_ICON: Record<WidgetType, LucideIcon> = {
   image: ImageIcon,
   selector: ListChecks,
   button: ArrowLeftRight,
+  stat_tracker: Gauge,
+  quick_snippets: Zap,
+  dice: Dices,
+  memory: Brain,
+  companion_state: Sparkles,
+  session_info: Info,
 };
 
 interface WidgetTypePickerSheetProps {
@@ -49,10 +68,15 @@ export function WidgetTypePickerSheet({
   onClose,
   onPick,
 }: WidgetTypePickerSheetProps) {
+  const { character } = useWidgetContext();
+  const isCompanion = character?.mode === "companion";
+  const types = TYPE_ORDER.filter((type) =>
+    type === "companion_state" ? isCompanion : true,
+  );
   return (
     <BottomMenu isOpen={open} onClose={onClose} title="Add widget">
       <div className="flex flex-col gap-2">
-        {TYPE_ORDER.map((type) => (
+        {types.map((type) => (
           <MenuButton
             key={type}
             icon={TYPE_ICON[type]}

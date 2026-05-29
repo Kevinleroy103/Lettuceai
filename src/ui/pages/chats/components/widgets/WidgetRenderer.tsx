@@ -7,6 +7,12 @@ import { WidgetPersonaInfo } from "./WidgetPersonaInfo";
 import { WidgetImage } from "./WidgetImage";
 import { WidgetButton } from "./WidgetButton";
 import { WidgetSelector } from "./WidgetSelector";
+import { WidgetStatTracker } from "./WidgetStatTracker";
+import { WidgetQuickSnippets } from "./WidgetQuickSnippets";
+import { WidgetDice } from "./WidgetDice";
+import { WidgetMemory } from "./WidgetMemory";
+import { WidgetCompanionState } from "./WidgetCompanionState";
+import { WidgetSessionInfo } from "./WidgetSessionInfo";
 
 interface WidgetRendererProps {
   node: WidgetNode;
@@ -30,5 +36,17 @@ export function WidgetRenderer({ node }: WidgetRendererProps) {
       return <WidgetSelector node={node} />;
     case "button":
       return <WidgetButton node={node} />;
+    case "stat_tracker":
+      return <WidgetStatTracker node={node} />;
+    case "quick_snippets":
+      return <WidgetQuickSnippets node={node} />;
+    case "dice":
+      return <WidgetDice node={node} />;
+    case "memory":
+      return <WidgetMemory node={node} />;
+    case "companion_state":
+      return <WidgetCompanionState node={node} />;
+    case "session_info":
+      return <WidgetSessionInfo node={node} />;
   }
 }

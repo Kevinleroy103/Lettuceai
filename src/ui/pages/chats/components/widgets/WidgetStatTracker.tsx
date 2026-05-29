@@ -1,0 +1,76 @@
+import { Minus, Plus } from "lucide-react";
+import type { StatTrackerNode } from "../../../../../core/storage/chatWidgetSchemas";
+import { cn } from "../../../../design-tokens";
+import { useWidgetContext } from "./WidgetContext";
+import { useWidgetEdit } from "./WidgetEditContext";
+import { widgetCardClass } from "./widgetSurface";
+
+export function WidgetStatTracker({ node }: { node: StatTrackerNode }) {
+  const { hasBackground, onUpdateNode } = useWidgetContext();
+  const { editing: areaEditing } = useWidgetEdit();
+  const interactive = !areaEditing;
+
+  const setValue = (statId: string, next: number) => {
+    if (!interactive) return;
+    const stats = node.stats.map((s) =>
+      s.id === statId ? { ...s, value: next } : s,
+    );
+    void onUpdateNode(node.id, { stats });
+  };
+
+  return (
+    <section
+      className={cn(
+        "flex flex-col gap-2 rounded-xl px-3 py-3",
+        widgetCardClass(hasBackground, node.design),
+      )}
+    >
+      {(node.title || node.description) && (
+        <header className="flex flex-col gap-0.5">
+          {node.title && (
+            <h3 className="text-sm font-semibold text-fg/75">{node.title}</h3>
+          )}
+          {node.description && (
+            <p className="text-[11px] leading-snug text-fg/45">{node.description}</p>
+          )}
+        </header>
+      )}
+      {node.stats.length === 0 ? (
+        <p className="text-[12px] italic text-fg/40">No stats yet.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {node.stats.map((stat) => (
+            <div key={stat.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[12px] text-fg/70">
+                {stat.label}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setValue(stat.id, stat.value - 1)}
+                  disabled={!interactive}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-fg/15 bg-fg/5 text-fg/60 transition hover:bg-fg/10 disabled:opacity-40"
+                  aria-label={`Decrease ${stat.label}`}
+                >
+                  <Minus size={12} strokeWidth={2.4} />
+                </button>
+                <span className="w-8 text-center text-sm font-semibold tabular-nums text-fg/85">
+                  {stat.value}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setValue(stat.id, stat.value + 1)}
+                  disabled={!interactive}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-fg/15 bg-fg/5 text-fg/60 transition hover:bg-fg/10 disabled:opacity-40"
+                  aria-label={`Increase ${stat.label}`}
+                >
+                  <Plus size={12} strokeWidth={2.4} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

@@ -14,9 +14,11 @@ import {
   type AvatarLibrarySelectionPayload,
 } from "../../components/AvatarPicker/librarySelection";
 import {
+  patchWidgetNode,
   setLibraryImageOnNode,
   setScratchPadContentOnNode,
 } from "./components/widgets/editor/widgetFactories";
+import type { WidgetNode } from "../../../core/storage/chatWidgetSchemas";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ArrowLeftRight, ChevronDown, NotebookPen, User, X } from "lucide-react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -568,6 +570,9 @@ export function ChatConversationPage() {
       persona: chatController.persona,
       session: chatController.session,
       hasBackground: !!backgroundImageData,
+      messageCount: messages.filter((m) => !m.id.startsWith("placeholder")).length,
+      sceneName: selectedScene?.direction?.trim() || (selectedScene ? "Scene" : null),
+      memories: chatController.session?.memories ?? [],
       personas: widgetPersonas,
       models: widgetModels,
       currentModelId: character?.defaultModelId ?? null,
@@ -662,6 +667,31 @@ export function ChatConversationPage() {
         });
         reloadCharacter();
       },
+      onUpdateNode: async (nodeId, patch) => {
+        const target = character;
+        if (!target) return;
+        const fresh = await getCharacter(target.id);
+        const existing = (fresh?.chatAppearance ?? target.chatAppearance ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const slots = (existing.chatWidgetSlots as WidgetSlots | undefined) ?? {
+          left: [],
+          right: [],
+        };
+        await updateCharacterChatAppearance(target.id, {
+          ...existing,
+          chatWidgetSlots: {
+            left: patchWidgetNode(slots.left, nodeId, patch as Partial<WidgetNode>),
+            right: patchWidgetNode(slots.right, nodeId, patch as Partial<WidgetNode>),
+          },
+        });
+        reloadCharacter();
+      },
+      onInsertText: (text) => {
+        const trimmed = draft.trimEnd();
+        setDraft(trimmed ? `${trimmed} ${text}` : text);
+      },
     };
   }, [
     character,
@@ -674,6 +704,9 @@ export function ChatConversationPage() {
     navigate,
     reloadCharacter,
     backgroundImageData,
+    selectedScene,
+    setDraft,
+    draft,
   ]);
 
   const persistWidgetSlots = useCallback(
