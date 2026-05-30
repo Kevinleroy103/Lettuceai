@@ -61,6 +61,7 @@ import {
   Copy,
   Maximize2,
   SendHorizontal,
+  X,
 } from "lucide-react";
 import { ProviderParameterSupportInfo } from "../../components/ProviderParameterSupportInfo";
 import { LlamaSamplerOrderEditor } from "../../components/LlamaSamplerOrderEditor";
@@ -79,7 +80,6 @@ import { cn } from "../../design-tokens";
 import { openDocs } from "../../../core/utils/docs";
 import { useI18n } from "../../../core/i18n/context";
 import { Switch } from "../../components/Switch";
-import { getPlatform } from "../../../core/utils/platform";
 
 type DownloadedGgufModel = {
   modelId: string;
@@ -178,20 +178,9 @@ function getLlamaRuntimeDetailKey(
   return "editModel.runtime.detail.failed";
 }
 
-type EditorViewMode = "simple" | "advanced";
 type EditorSectionKey = "generation" | "runtime" | "reasoning" | "caching" | "capabilities";
-type SimpleEditorSectionKey = "generation" | "runtime" | "reasoning" | "capabilities";
 
 const EDITOR_FADE_DURATION = 0.16;
-const MODEL_EDITOR_VIEW_MODE_STORAGE_KEY = "lettuce.settings.models.editorViewMode";
-
-function getStoredEditorViewMode(): EditorViewMode {
-  if (typeof window === "undefined") {
-    return "simple";
-  }
-  const stored = window.localStorage.getItem(MODEL_EDITOR_VIEW_MODE_STORAGE_KEY);
-  return stored === "advanced" ? "advanced" : "simple";
-}
 
 const LLAMA_KV_TYPE_OPTIONS = [
   { value: "auto", label: "Auto (model default)" },
@@ -273,35 +262,6 @@ const getEditDistance = (a: string, b: string) => {
   return dp[rows - 1][cols - 1];
 };
 
-function EditorPanel({
-  title,
-  description,
-  action,
-  children,
-  className,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn("rounded-xl border border-fg/10 bg-surface-el/35", className)}>
-      <div className="flex items-start justify-between gap-4 border-b border-fg/8 px-5 py-4">
-        <div className="min-w-0">
-          <h2 className="text-[13px] font-semibold text-fg">{title}</h2>
-          {description ? (
-            <p className="mt-1 text-[13px] leading-relaxed text-fg/45">{description}</p>
-          ) : null}
-        </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-      <div className="p-5">{children}</div>
-    </section>
-  );
-}
-
 function FieldBlock({
   label,
   action,
@@ -313,7 +273,7 @@ function FieldBlock({
 }) {
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex h-9 items-center justify-between gap-3">
         <label className="text-[13px] font-medium text-fg/72">{label}</label>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
@@ -322,56 +282,16 @@ function FieldBlock({
   );
 }
 
-function CollapsedEditorSectionButton({
-  title,
-  summary,
-  description,
-  isOpen,
-  onClick,
-}: {
-  title: string;
-  summary: string;
-  description: string;
-  isOpen: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-start justify-between gap-4 rounded-lg border px-4 py-3 text-left transition",
-        isOpen
-          ? "border-fg/20 bg-fg/6 text-fg"
-          : "border-fg/10 bg-transparent text-fg/70 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/92",
-      )}
-    >
-      <div className="min-w-0">
-        <div className="text-[13px] font-medium text-current">{title}</div>
-        <div className="mt-1 text-[13px] text-fg/48">{description}</div>
-        <div className="mt-2 text-[12px] text-fg/36">{summary}</div>
-      </div>
-      <div className="mt-0.5 shrink-0 text-fg/40">
-        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-      </div>
-    </button>
-  );
-}
 
 export function EditModelPage() {
   const { t } = useI18n();
-  const isMobile = useMemo(() => getPlatform().type === "mobile", []);
   const [showParameterSupport, setShowParameterSupport] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [showOnlyFreeModels, setShowOnlyFreeModels] = useState(false);
-  const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>(() =>
-    getStoredEditorViewMode(),
-  );
-  const [activeAdvancedPanel, setActiveAdvancedPanel] = useState<EditorSectionKey>("generation");
-  const [activeSimplePanel, setActiveSimplePanel] = useState<SimpleEditorSectionKey | null>(null);
+  const [activePanel, setActivePanel] = useState<EditorSectionKey>("generation");
   const [selectedLlamaQuickPreset, setSelectedLlamaQuickPreset] = useState<
     "balanced" | "throughput" | "vram" | "cpu_ram" | null
   >(null);
@@ -1309,12 +1229,20 @@ export function EditModelPage() {
     : isOllamaModel
       ? "Ollama"
       : t("editModel.sections.runtime");
-  const effectiveEditorViewMode: EditorViewMode = isMobile ? "simple" : editorViewMode;
-  const activeDetailPanel =
-    effectiveEditorViewMode === "advanced" ? activeAdvancedPanel : activeSimplePanel;
-  const toggleSimplePanel = (panel: SimpleEditorSectionKey) => {
-    setActiveSimplePanel((current) => (current === panel ? null : panel));
-  };
+  const activeDetailPanel = activePanel;
+  const editorPanels: { key: EditorSectionKey; label: string }[] = [
+    { key: "generation", label: t("editModel.sections.generation") },
+    ...(hasRuntimePanel
+      ? [{ key: "runtime" as const, label: t("editModel.sections.runtime") }]
+      : []),
+    ...(showReasoningSection
+      ? [{ key: "reasoning" as const, label: t("editModel.sections.reasoning") }]
+      : []),
+    ...(showCachingSection
+      ? [{ key: "caching" as const, label: t("editModel.sections.promptCaching") }]
+      : []),
+    { key: "capabilities", label: t("editModel.sections.capabilities") },
+  ];
   function updateSdSetting<K extends keyof typeof modelAdvancedDraft>(
     key: K,
     value: (typeof modelAdvancedDraft)[K],
@@ -1404,14 +1332,6 @@ export function EditModelPage() {
     input: inputCapabilitySummary || t("editModel.summaries.textOnly"),
     output: outputCapabilitySummary || t("editModel.summaries.textOnly"),
   });
-  const simpleDetailOrder =
-    activeSimplePanel === "generation"
-      ? 15
-      : activeSimplePanel === "runtime"
-        ? 25
-        : activeSimplePanel === "reasoning"
-          ? 35
-          : 45;
   const applyLlamaPreset = (preset: "balanced" | "throughput" | "vram" | "cpu_ram") => {
     setSelectedLlamaQuickPreset(preset);
     if (preset === "balanced") {
@@ -1461,34 +1381,23 @@ export function EditModelPage() {
   }, [resetToInitial]);
 
   useEffect(() => {
-    if (activeAdvancedPanel === "runtime" && !hasRuntimePanel) {
-      setActiveAdvancedPanel(showReasoningSection ? "reasoning" : "generation");
-      return;
+    if (activePanel === "runtime" && !hasRuntimePanel) {
+      setActivePanel(showReasoningSection ? "reasoning" : "generation");
+    } else if (activePanel === "reasoning" && !showReasoningSection) {
+      setActivePanel(hasRuntimePanel ? "runtime" : "generation");
+    } else if (activePanel === "caching" && !showCachingSection) {
+      setActivePanel("generation");
     }
-    if (activeAdvancedPanel === "reasoning" && !showReasoningSection) {
-      setActiveAdvancedPanel(hasRuntimePanel ? "runtime" : "generation");
-    }
-  }, [activeAdvancedPanel, hasRuntimePanel, showReasoningSection]);
+  }, [activePanel, hasRuntimePanel, showReasoningSection, showCachingSection]);
 
   useEffect(() => {
-    if (activeSimplePanel === "runtime" && !hasRuntimePanel) {
-      setActiveSimplePanel(null);
-      return;
-    }
-    if (activeSimplePanel === "reasoning" && !showReasoningSection) {
-      setActiveSimplePanel(null);
-    }
-  }, [activeSimplePanel, hasRuntimePanel, showReasoningSection]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (isMobile) {
-      return;
-    }
-    window.localStorage.setItem(MODEL_EDITOR_VIEW_MODE_STORAGE_KEY, editorViewMode);
-  }, [editorViewMode, isMobile]);
+    if (!showLlamaRuntimeReport) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowLlamaRuntimeReport(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showLlamaRuntimeReport]);
 
   useEffect(() => {
     if (!isLocalModel) {
@@ -1690,11 +1599,11 @@ export function EditModelPage() {
 
   return (
     <div className="flex min-h-dvh flex-col text-fg/90">
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32">
+      <main className="flex-1 overflow-y-auto px-4 pt-6 pb-32 sm:px-6 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mx-auto w-full max-w-6xl space-y-6"
+          className="mx-auto w-full max-w-7xl space-y-6"
         >
           {error && (
             <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3">
@@ -1704,158 +1613,71 @@ export function EditModelPage() {
 
           <div className="relative">
             <div className="w-full space-y-6">
-              <EditorPanel
-                title={t("editModel.setup.title")}
-                description={t("editModel.setup.description")}
-              >
+              <section className="space-y-6">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-fg">
+                    {t("editModel.setup.title")}
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-relaxed text-fg/45">
+                    {t("editModel.setup.description")}
+                  </p>
+                </div>
                 <div className="space-y-6">
                   {isLocalModel && llamaRuntimeReport && (
-                    <div className="rounded-lg border border-fg/10 bg-fg/4">
-                      <button
-                        type="button"
-                        onClick={() => setShowLlamaRuntimeReport((value) => !value)}
-                        className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left"
-                      >
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div
-                            className={cn(
-                              "mt-0.5 flex h-7 w-7 items-center justify-center rounded-md border",
-                              llamaRuntimeReport.status === "succeeded"
-                                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-400"
-                                : llamaRuntimeReport.status === "cpuFallbackSucceeded"
-                                  ? "border-warning/30 bg-warning/10 text-warning"
-                                  : "border-danger/30 bg-danger/10 text-danger",
-                            )}
-                          >
-                            {llamaRuntimeReport.status === "succeeded" ||
-                              llamaRuntimeReport.status === "cpuFallbackSucceeded" ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <AlertTriangle className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[13px] font-medium text-fg">
-                                {t("editModel.runtime.lastReport")}
-                              </span>
-                              <span
-                                className={cn(
-                                  "rounded-md px-2 py-0.5 text-[11px] font-medium",
-                                  llamaRuntimeReport.status === "succeeded"
-                                    ? "bg-emerald-400/12 text-emerald-400"
-                                    : llamaRuntimeReport.status === "cpuFallbackSucceeded"
-                                      ? "bg-warning/12 text-warning"
-                                      : "bg-danger/12 text-danger",
-                                )}
-                              >
-                                {llamaRuntimeReport.status === "succeeded"
-                                  ? t("editModel.runtime.badges.succeeded")
-                                  : llamaRuntimeReport.status === "cpuFallbackSucceeded"
-                                    ? t("editModel.runtime.badges.cpuFallbackSucceeded")
-                                    : llamaRuntimeReport.status === "cpuFallbackFailed"
-                                      ? t("editModel.runtime.badges.cpuFallbackFailed")
-                                      : t("editModel.runtime.badges.failed")}
-                              </span>
-                            </div>
-                            <p className="text-[13px] leading-relaxed text-fg/72">
-                              {t(getLlamaRuntimeHeadlineKey(llamaRuntimeReport))}
-                            </p>
-                            <p className="text-[12px] leading-relaxed text-fg/48">
-                              {t(getLlamaRuntimeDetailKey(llamaRuntimeReport))}
-                            </p>
-                          </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowLlamaRuntimeReport(true)}
+                      className="flex w-full items-center justify-between gap-4 rounded-lg border border-fg/10 bg-surface-el/20 px-4 py-3 text-left transition hover:bg-surface-el/30"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                            llamaRuntimeReport.status === "succeeded"
+                              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-400"
+                              : llamaRuntimeReport.status === "cpuFallbackSucceeded"
+                                ? "border-warning/30 bg-warning/10 text-warning"
+                                : "border-danger/30 bg-danger/10 text-danger",
+                          )}
+                        >
+                          {llamaRuntimeReport.status === "succeeded" ||
+                          llamaRuntimeReport.status === "cpuFallbackSucceeded" ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <AlertTriangle className="h-4 w-4" />
+                          )}
                         </div>
-                        {showLlamaRuntimeReport ? (
-                          <ChevronDown className="mt-1 h-4 w-4 text-fg/45" />
-                        ) : (
-                          <ChevronRight className="mt-1 h-4 w-4 text-fg/45" />
-                        )}
-                      </button>
-
-                      <AnimatePresence initial={false}>
-                        {showLlamaRuntimeReport && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.16, ease: "easeOut" }}
-                            className="overflow-hidden border-t border-fg/8"
-                          >
-                            <div className="space-y-4 px-4 py-4">
-                              {(llamaRuntimeReport.gpuFallbackReason ||
-                                llamaRuntimeReport.errorMessage) && (
-                                  <div className="grid gap-3 lg:grid-cols-2">
-                                    {llamaRuntimeReport.gpuFallbackReason && (
-                                      <div className="rounded-lg border border-warning/25 bg-warning/8 px-3 py-2.5">
-                                        <div className="text-[11px] font-medium uppercase tracking-wide text-warning/90">
-                                          {t("editModel.runtime.gpuFallbackReason")}
-                                        </div>
-                                        <p className="mt-1 text-[13px] leading-relaxed text-fg/78">
-                                          {llamaRuntimeReport.gpuFallbackReason}
-                                        </p>
-                                      </div>
-                                    )}
-                                    {llamaRuntimeReport.errorMessage && (
-                                      <div className="rounded-lg border border-danger/25 bg-danger/8 px-3 py-2.5">
-                                        <div className="text-[11px] font-medium uppercase tracking-wide text-danger/90">
-                                          {t("editModel.runtime.finalError")}
-                                        </div>
-                                        <p className="mt-1 text-[13px] leading-relaxed text-fg/78">
-                                          {llamaRuntimeReport.errorMessage}
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                                {llamaRuntimeFacts.map((item) => (
-                                  <div
-                                    key={item.label}
-                                    className="rounded-lg border border-fg/8 bg-surface-el/14 px-3 py-2.5"
-                                  >
-                                    <div className="text-[11px] text-fg/42">{item.label}</div>
-                                    <div className="mt-1 wrap-break-word text-[13px] text-fg/86">
-                                      {item.value}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-
-                              {llamaRuntimeReport.status === "cpuFallbackSucceeded" &&
-                                llamaRuntimeReport.suggestedSettings && (
-                                  <div className="flex flex-col gap-3 rounded-lg border border-fg/10 bg-surface-el/18 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="space-y-1">
-                                      <div className="text-[13px] font-medium text-fg">
-                                        {t("editModel.runtime.workingRecoveryConfig")}
-                                      </div>
-                                      <p className="text-[12px] text-fg/52">
-                                        {t("editModel.runtime.context")}{" "}
-                                        {formatRuntimeNumber(
-                                          llamaRuntimeReport.suggestedSettings.contextLength,
-                                        ) ?? t("editModel.runtime.na")}
-                                        {" • "}{t("editModel.runtime.batch")}{" "}
-                                        {formatRuntimeNumber(
-                                          llamaRuntimeReport.suggestedSettings.llamaBatchSize,
-                                        ) ?? t("editModel.runtime.na")}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleApplyLlamaRuntimeSuggestion()}
-                                      disabled={saving}
-                                      className="rounded-lg border border-warning/30 bg-warning/12 px-3 py-2 text-[13px] font-medium text-warning transition hover:bg-warning/18 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      {t("editModel.runtime.applyWorkingConfig")}
-                                    </button>
-                                  </div>
-                                )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-medium text-fg">
+                              {t("editModel.runtime.lastReport")}
+                            </span>
+                            <span
+                              className={cn(
+                                "rounded-md px-2 py-0.5 text-[11px] font-medium",
+                                llamaRuntimeReport.status === "succeeded"
+                                  ? "bg-emerald-400/12 text-emerald-400"
+                                  : llamaRuntimeReport.status === "cpuFallbackSucceeded"
+                                    ? "bg-warning/12 text-warning"
+                                    : "bg-danger/12 text-danger",
+                              )}
+                            >
+                              {llamaRuntimeReport.status === "succeeded"
+                                ? t("editModel.runtime.badges.succeeded")
+                                : llamaRuntimeReport.status === "cpuFallbackSucceeded"
+                                  ? t("editModel.runtime.badges.cpuFallbackSucceeded")
+                                  : llamaRuntimeReport.status === "cpuFallbackFailed"
+                                    ? t("editModel.runtime.badges.cpuFallbackFailed")
+                                    : t("editModel.runtime.badges.failed")}
+                            </span>
+                          </div>
+                          <p className="truncate text-[12px] text-fg/50">
+                            {t(getLlamaRuntimeHeadlineKey(llamaRuntimeReport))}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-fg/40" />
+                    </button>
                   )}
 
                   <FieldBlock label={t("editModel.fields.platform")}>
@@ -2219,239 +2041,48 @@ export function EditModelPage() {
                     />
                   </MenuSection>
                 </BottomMenu>
-              </EditorPanel>
+              </section>
 
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={effectiveEditorViewMode}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{
-                    duration: EDITOR_FADE_DURATION,
-                    ease: "easeInOut",
-                  }}
-                  className={cn(
-                    "space-y-4",
-                    effectiveEditorViewMode === "simple" && "flex flex-col gap-2 space-y-0",
-                  )}
-                >
-                  {!isMobile && (
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[13px] font-medium text-fg/78">
-                          {t("editModel.editorMode.title")}
-                        </div>
-                        <div className="mt-1 text-[13px] text-fg/45">
-                          {t("editModel.editorMode.description")}
-                        </div>
-                      </div>
-                      <div className="inline-flex rounded-lg border border-fg/10 bg-fg/4 p-1">
-                        <button
-                          type="button"
-                          onClick={() => setEditorViewMode("simple")}
-                          className={cn(
-                            "rounded-md px-3 py-1.5 text-[13px] transition",
-                            editorViewMode === "simple"
-                              ? "bg-fg/10 text-fg"
-                              : "text-fg/55 hover:text-fg/82",
-                          )}
-                        >
-                          {t("editModel.editorMode.simple")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditorViewMode("advanced")}
-                          className={cn(
-                            "rounded-md px-3 py-1.5 text-[13px] transition",
-                            editorViewMode === "advanced"
-                              ? "bg-fg/10 text-fg"
-                              : "text-fg/55 hover:text-fg/82",
-                          )}
-                        >
-                          {t("editModel.editorMode.advanced")}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {effectiveEditorViewMode === "advanced" ? (
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="border-t border-fg/10 pt-6">
+                <div className="-mb-px flex gap-6 overflow-x-auto border-b border-fg/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {editorPanels.map((panel) => {
+                    const isActive = activePanel === panel.key;
+                    return (
                       <button
+                        key={panel.key}
                         type="button"
-                        onClick={() => setActiveAdvancedPanel("generation")}
+                        onClick={() => setActivePanel(panel.key)}
                         className={cn(
-                          "rounded-lg border px-4 py-3 text-left transition",
-                          activeAdvancedPanel === "generation"
-                            ? "border-fg/22 bg-fg/8 text-fg"
-                            : "border-fg/10 bg-transparent text-fg/65 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/90",
+                          "shrink-0 border-b-2 px-1 pb-3 text-[13px] font-medium transition-colors",
+                          isActive
+                            ? "border-fg text-fg"
+                            : "border-transparent text-fg/45 hover:text-fg/75",
                         )}
                       >
-                        <div className="text-[13px] font-medium">
-                          {t("editModel.sections.generation")}
-                        </div>
-                        <div className="mt-1 text-[13px] text-fg/45">
-                          {isAutomatic1111Provider
-                            ? t("editModel.sectionDescriptions.generationAutomatic1111")
-                            : t("editModel.sectionDescriptions.generation")}
-                        </div>
+                        {panel.label}
                       </button>
-
-                      {hasRuntimePanel && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveAdvancedPanel("runtime")}
-                          className={cn(
-                            "rounded-lg border px-4 py-3 text-left transition",
-                            activeAdvancedPanel === "runtime"
-                              ? "border-fg/22 bg-fg/8 text-fg"
-                              : "border-fg/10 bg-transparent text-fg/65 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/90",
-                          )}
-                        >
-                          <div className="text-[13px] font-medium">
-                            {t("editModel.sections.runtime")}
-                          </div>
-                          <div className="mt-1 text-[13px] text-fg/45">
-                            {t("editModel.sectionDescriptions.runtime", {
-                              runtime: runtimePanelTitle,
-                            })}
-                          </div>
-                        </button>
-                      )}
-
-                      {showReasoningSection && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveAdvancedPanel("reasoning")}
-                          className={cn(
-                            "rounded-lg border px-4 py-3 text-left transition",
-                            activeAdvancedPanel === "reasoning"
-                              ? "border-fg/22 bg-fg/8 text-fg"
-                              : "border-fg/10 bg-transparent text-fg/65 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/90",
-                          )}
-                        >
-                          <div className="text-[13px] font-medium">
-                            {t("editModel.sections.reasoning")}
-                          </div>
-                          <div className="mt-1 text-[13px] text-fg/45">
-                            {t("editModel.sectionDescriptions.reasoning")}
-                          </div>
-                        </button>
-                      )}
-
-                      {showCachingSection && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveAdvancedPanel("caching")}
-                          className={cn(
-                            "rounded-lg border px-4 py-3 text-left transition",
-                            activeAdvancedPanel === "caching"
-                              ? "border-fg/22 bg-fg/8 text-fg"
-                              : "border-fg/10 bg-transparent text-fg/65 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/90",
-                          )}
-                        >
-                          <div className="text-[13px] font-medium">
-                            {t("editModel.sections.promptCaching")}
-                          </div>
-                          <div className="mt-1 text-[13px] text-fg/45">
-                            {t("editModel.sectionDescriptions.promptCaching")}
-                          </div>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveAdvancedPanel("capabilities")}
-                        className={cn(
-                          "rounded-lg border px-4 py-3 text-left transition",
-                          activeAdvancedPanel === "capabilities"
-                            ? "border-fg/22 bg-fg/8 text-fg"
-                            : "border-fg/10 bg-transparent text-fg/65 hover:border-fg/18 hover:bg-fg/4 hover:text-fg/90",
-                        )}
-                      >
-                        <div className="text-[13px] font-medium">
-                          {t("editModel.sections.capabilities")}
-                        </div>
-                        <div className="mt-1 text-[13px] text-fg/45">
-                          {t("editModel.sectionDescriptions.capabilities")}
-                        </div>
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ order: 10 }}>
-                        <CollapsedEditorSectionButton
-                          title={t("editModel.sections.generation")}
-                          description={
-                            isAutomatic1111Provider
-                              ? t("editModel.sectionDescriptions.generationAutomatic1111")
-                              : t("editModel.sectionDescriptions.generation")
-                          }
-                          summary={generationSummary}
-                          isOpen={activeSimplePanel === "generation"}
-                          onClick={() => toggleSimplePanel("generation")}
-                        />
-                      </div>
-                      {hasRuntimePanel && (
-                        <div style={{ order: 20 }}>
-                          <CollapsedEditorSectionButton
-                            title={t("editModel.sections.runtime")}
-                            description={t("editModel.sectionDescriptions.runtime", {
-                              runtime: runtimePanelTitle,
-                            })}
-                            summary={runtimeSummary}
-                            isOpen={activeSimplePanel === "runtime"}
-                            onClick={() => toggleSimplePanel("runtime")}
-                          />
-                        </div>
-                      )}
-                      {showReasoningSection && (
-                        <div style={{ order: 30 }}>
-                          <CollapsedEditorSectionButton
-                            title={t("editModel.sections.reasoning")}
-                            description={t("editModel.sectionDescriptions.reasoning")}
-                            summary={reasoningSummary}
-                            isOpen={activeSimplePanel === "reasoning"}
-                            onClick={() => toggleSimplePanel("reasoning")}
-                          />
-                        </div>
-                      )}
-                      <div style={{ order: 40 }}>
-                        <CollapsedEditorSectionButton
-                          title={t("editModel.sections.capabilities")}
-                          description={t("editModel.sectionDescriptions.capabilitiesSimple")}
-                          summary={capabilitiesSummary}
-                          isOpen={activeSimplePanel === "capabilities"}
-                          onClick={() => toggleSimplePanel("capabilities")}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {activeDetailPanel ? (
-                    <motion.div
-                      key={`${effectiveEditorViewMode}-${activeDetailPanel}`}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="pt-1"
-                      style={
-                        effectiveEditorViewMode === "simple"
-                          ? { order: simpleDetailOrder }
-                          : undefined
-                      }
-                    >
+                    );
+                  })}
+                </div>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={activePanel}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: EDITOR_FADE_DURATION, ease: "easeInOut" }}
+                    className="pt-6"
+                  >
                       <div className="space-y-8">
                         {/* Generation Parameters */}
                         {activeDetailPanel === "generation" && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                                {t("editModel.sections.generation")}
-                              </label>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-[12px] text-fg/45">{generationSummary}</p>
                               <button
                                 type="button"
                                 onClick={() => setShowParameterSupport(true)}
-                                className="text-fg/40 hover:text-fg/60 transition"
+                                className="shrink-0 text-fg/40 hover:text-fg/60 transition"
                               >
                                 <Info size={14} />
                               </button>
@@ -2459,7 +2090,7 @@ export function EditModelPage() {
 
                             {isAutomatic1111Provider ? (
                               <div className="space-y-5">
-                                <div className="rounded-xl border border-accent/20 bg-accent/8 px-4 py-3 text-[13px] leading-relaxed text-fg/72">
+                                <div className="text-[13px] leading-relaxed text-fg/55">
                                   {t("editModel.generation.automatic1111Help")}
                                 </div>
 
@@ -2474,7 +2105,7 @@ export function EditModelPage() {
                                           {t("editModel.generationDescriptions.sdSteps")}
                                         </span>
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.sdSteps ?? "28"}
                                       </span>
                                     </div>
@@ -2508,7 +2139,7 @@ export function EditModelPage() {
                                           {t("editModel.generationDescriptions.sdCfgScale")}
                                         </span>
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.sdCfgScale?.toFixed(1) ?? "6.5"}
                                       </span>
                                     </div>
@@ -2538,7 +2169,7 @@ export function EditModelPage() {
                                           {t("editModel.generationDescriptions.sdSize")}
                                         </span>
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.sdSize ?? "1024x1024"}
                                       </span>
                                     </div>
@@ -2582,7 +2213,7 @@ export function EditModelPage() {
                                           {t("editModel.generationDescriptions.sdSeed")}
                                         </span>
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.sdSeed ?? t("editModel.placeholders.random")}
                                       </span>
                                     </div>
@@ -2616,7 +2247,7 @@ export function EditModelPage() {
                                           {t("editModel.generationDescriptions.sdDenoise")}
                                         </span>
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.sdDenoisingStrength?.toFixed(2) ??
                                           "0.75"}
                                       </span>
@@ -2683,7 +2314,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.temperature?.toFixed(2) ?? "0.70"}
                                     </span>
                                   </div>
@@ -2724,7 +2355,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.topP?.toFixed(2) ?? "1.00"}
                                     </span>
                                   </div>
@@ -2765,7 +2396,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.maxOutputTokens
                                         ? modelAdvancedDraft.maxOutputTokens.toLocaleString()
                                         : t("common.labels.auto")}
@@ -2811,7 +2442,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.topK ? modelAdvancedDraft.topK : "Auto"}
                                     </span>
                                   </div>
@@ -2855,7 +2486,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.frequencyPenalty?.toFixed(2) ?? "0.00"}
                                     </span>
                                   </div>
@@ -2896,7 +2527,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.presencePenalty?.toFixed(2) ?? "0.00"}
                                     </span>
                                   </div>
@@ -2923,14 +2554,14 @@ export function EditModelPage() {
                         {/* Local llama.cpp Settings */}
                         {activeDetailPanel === "runtime" && isLocalModel && (
                           <div className="space-y-4">
-                            <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                              Local Inference (llama.cpp)
-                            </label>
+                            <p className="text-[12px] text-fg/45">
+                              {runtimePanelTitle} · {runtimeSummary}
+                            </p>
 
                             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
                               {/* 1. Memory & Context */}
-                              <div className="space-y-6 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <div className="space-y-0.5">
                                     <span className="block text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                       Memory & Context
@@ -2962,7 +2593,7 @@ export function EditModelPage() {
                                         <HelpCircle size={12} />
                                       </button>
                                     </div>
-                                    <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                    <span className="font-mono text-[13px] text-fg/55">
                                       {modelAdvancedDraft.contextLength
                                         ? modelAdvancedDraft.contextLength.toLocaleString()
                                         : "Auto"}
@@ -2997,7 +2628,7 @@ export function EditModelPage() {
                                       </p>
                                     )}
                                     {showContextWarning && (
-                                      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-warning/80">
+                                      <div className="flex items-start gap-2 text-[13px] text-warning/80">
                                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                                         <span>
                                           Are you sure? This may not run on your device. We
@@ -3007,7 +2638,7 @@ export function EditModelPage() {
                                       </div>
                                     )}
                                     {showContextCritical && (
-                                      <div className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-danger/80">
+                                      <div className="flex items-start gap-2 text-[13px] text-danger/80">
                                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                                         <span>
                                           This model likely won&apos;t fit in memory on your device.
@@ -3020,7 +2651,7 @@ export function EditModelPage() {
 
                                 {/* Runability & System Info */}
                                 {editorModel?.name?.trim() && (
-                                  <div className="rounded-lg border border-fg/8 bg-fg/4 px-4 py-3 text-[13px]">
+                                  <div className="text-[13px] text-fg/55">
                                     {runabilityLoading ? (
                                       /* Skeleton */
                                       <div className="space-y-3 animate-pulse">
@@ -3382,7 +3013,7 @@ export function EditModelPage() {
 
                                 {/* Performance */}
                                 <div className="space-y-6 border-t border-fg/8 pt-6">
-                                  <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                                  <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                     <div className="space-y-0.5">
                                       <span className="block text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                         Performance
@@ -3393,7 +3024,7 @@ export function EditModelPage() {
                                     </div>
                                   </div>
 
-                                  <div className="space-y-3 rounded-xl border border-fg/10 bg-surface-el/10 p-3">
+                                  <div className="space-y-3">
                                     <span className="block text-[13px] font-medium text-fg/70">
                                       Quick Presets
                                     </span>
@@ -3433,7 +3064,7 @@ export function EditModelPage() {
                                           (detail) => (
                                             <span
                                               key={detail}
-                                              className="rounded-md border border-fg/10 bg-fg/4 px-2.5 py-1 text-[13px] text-fg/62"
+                                              className="font-mono text-[13px] text-fg/55"
                                             >
                                               {detail}
                                             </span>
@@ -3460,7 +3091,7 @@ export function EditModelPage() {
                                           </span>
                                         ) : null}
                                       </div>
-                                      <span className="rounded-lg bg-surface-el/30 px-2 py-1 font-mono text-[13px] text-accent">
+                                      <span className="font-mono text-[13px] text-fg/55">
                                         {modelAdvancedDraft.llamaGpuLayers !== null &&
                                           modelAdvancedDraft.llamaGpuLayers !== undefined
                                           ? modelAdvancedDraft.llamaGpuLayers
@@ -3596,8 +3227,8 @@ export function EditModelPage() {
                               </div>
 
                               {/* 3. Sampling & Quality + 4. Prompting & Templates */}
-                              <div className="space-y-6 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <div className="space-y-0.5">
                                     <span className="block text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                       Sampling & Quality
@@ -3645,7 +3276,7 @@ export function EditModelPage() {
                                       (detail) => (
                                         <span
                                           key={detail}
-                                          className="rounded-md border border-fg/10 bg-fg/4 px-2.5 py-1 text-[13px] text-fg/62"
+                                          className="font-mono text-[13px] text-fg/55"
                                         >
                                           {detail}
                                         </span>
@@ -3837,7 +3468,7 @@ export function EditModelPage() {
 
                                 {/* Prompting & Templates */}
                                 <div className="space-y-6 border-t border-fg/8 pt-6">
-                                  <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                                  <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                     <div className="space-y-0.5">
                                       <span className="block text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                         Prompting & Templates
@@ -3990,7 +3621,7 @@ export function EditModelPage() {
                                     </div>
                                   </div>
 
-                                  <div className="rounded-xl border border-danger/20 bg-danger/6 p-4">
+                                  <div className="text-danger/80">
                                     <div className="flex items-start justify-between gap-4">
                                       <div className="min-w-0 space-y-1.5">
                                         <div className="flex items-start gap-3">
@@ -4047,14 +3678,14 @@ export function EditModelPage() {
                         {/* Ollama Settings */}
                         {activeDetailPanel === "runtime" && isOllamaModel && (
                           <div className="space-y-4">
-                            <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                              Local Inference (Ollama)
-                            </label>
+                            <p className="text-[12px] text-fg/45">
+                              {runtimePanelTitle} · {runtimeSummary}
+                            </p>
 
                             <div className="space-y-6">
                               {/* 1. Memory & Tokens */}
-                              <div className="space-y-6 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <span className="text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                     Memory & Tokens
                                   </span>
@@ -4136,8 +3767,8 @@ export function EditModelPage() {
                               </div>
 
                               {/* 2. Performance */}
-                              <div className="space-y-6 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <span className="text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                     Performance
                                   </span>
@@ -4219,8 +3850,8 @@ export function EditModelPage() {
                               </div>
 
                               {/* 3. Sampling */}
-                              <div className="space-y-6 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <span className="text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                     Sampling & Penalties
                                   </span>
@@ -4417,8 +4048,8 @@ export function EditModelPage() {
                               </div>
 
                               {/* 4. Stop Sequences */}
-                              <div className="space-y-4 rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                <div className="flex items-center gap-2 border-l-2 border-accent/30 pl-3">
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-2 border-l-2 border-fg/20 pl-3">
                                   <span className="text-[13px] font-bold text-fg/80 uppercase tracking-tight">
                                     Stop Sequences
                                   </span>
@@ -4445,14 +4076,12 @@ export function EditModelPage() {
                         {/* Reasoning Section (Thinking) */}
                         {activeDetailPanel === "reasoning" && showReasoningSection && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                                {t("editModel.sections.reasoningThinking")}
-                              </label>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-[12px] text-fg/45">{reasoningSummary}</p>
                               <button
                                 type="button"
                                 onClick={() => openDocs("models", "reasoning-mode")}
-                                className="text-fg/40 hover:text-fg/60 transition"
+                                className="shrink-0 text-fg/40 hover:text-fg/60 transition"
                                 aria-label={t("editModel.reasoning.helpLabel")}
                               >
                                 <HelpCircle size={14} />
@@ -4460,7 +4089,7 @@ export function EditModelPage() {
                             </div>
 
                             <div className="space-y-6">
-                              <div className="flex items-center justify-between rounded-xl border border-fg/8 bg-surface-el/10 p-4">
+                              <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3 border-l-2 border-warning/40 pl-3">
                                   <Brain size={16} className="text-warning/80" />
                                   <div className="space-y-0.5">
@@ -4546,7 +4175,7 @@ export function EditModelPage() {
                                 </div>
                               )}
 
-                              <div className="flex items-center justify-between rounded-xl border border-fg/8 bg-surface-el/10 p-4">
+                              <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3 border-l-2 border-warning/40 pl-3">
                                   <SendHorizontal size={16} className="text-warning/80" />
                                   <div className="space-y-0.5">
@@ -4570,14 +4199,14 @@ export function EditModelPage() {
                         {/* Prompt Caching Section */}
                         {activeDetailPanel === "caching" && showCachingSection && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                                {t("editModel.sections.promptCaching")}
-                              </label>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-[12px] text-fg/45">
+                                {t("editModel.sectionDescriptions.promptCaching")}
+                              </p>
                               <button
                                 type="button"
                                 onClick={() => setShowParameterSupport(true)}
-                                className="text-fg/40 hover:text-fg/60 transition"
+                                className="shrink-0 text-fg/40 hover:text-fg/60 transition"
                                 title={t("editModel.parameterSupport.title")}
                               >
                                 <Info size={14} />
@@ -4587,8 +4216,8 @@ export function EditModelPage() {
                             <div className="space-y-6">
                               {hasAutomaticCaching ? (
                                 <div className="space-y-4">
-                                  <div className="flex items-start justify-between rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                    <div className="flex items-start gap-3 border-l-2 border-accent/30 pl-3">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-start gap-3 border-l-2 border-fg/20 pl-3">
                                       <HardDrive size={16} className="mt-0.5 text-accent/80" />
                                       <div className="space-y-1">
                                         <span className="block text-[13px] font-medium text-fg/70">
@@ -4601,7 +4230,7 @@ export function EditModelPage() {
                                     </div>
                                   </div>
 
-                                  <div className="rounded-lg border border-fg/10 bg-fg/4 px-4 py-3 text-[13px] leading-relaxed text-fg/65">
+                                  <div className="text-[13px] leading-relaxed text-fg/55">
                                     {editorModel?.providerId === "groq" && (
                                       <>
                                         <strong className="text-fg/80">
@@ -4624,8 +4253,8 @@ export function EditModelPage() {
                               ) : (
                                 <>
                                   {/* ── Enable toggle ── */}
-                                  <div className="flex items-center justify-between rounded-xl border border-fg/8 bg-surface-el/10 p-4">
-                                    <div className="flex items-center gap-3 border-l-2 border-accent/30 pl-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3 border-l-2 border-fg/20 pl-3">
                                       <HardDrive size={16} className="text-accent/80" />
                                       <div className="space-y-0.5">
                                         <span className="block text-[13px] font-medium text-fg/70">
@@ -4646,7 +4275,7 @@ export function EditModelPage() {
                                   {modelAdvancedDraft.promptCachingEnabled && (
                                     <>
                                       {/* ── TTL toggle ── */}
-                                      <div className="flex items-center justify-between rounded-xl border border-fg/8 bg-surface-el/10 p-4">
+                                      <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3 border-l-2 border-fg/10 pl-3">
                                           <div className="space-y-0.5">
                                             <span className="block text-[13px] font-medium text-fg/70">
@@ -4699,7 +4328,7 @@ export function EditModelPage() {
                                       </div>
 
                                       {/* ── Pricing / TTL notes ── */}
-                                      <div className="rounded-lg border border-fg/10 bg-fg/4 px-4 py-3 text-[13px] leading-relaxed text-fg/65">
+                                      <div className="text-[13px] leading-relaxed text-fg/55">
                                         <strong className="text-fg/80">
                                           {t("editModel.promptCaching.pricingTitle")}
                                         </strong>{" "}
@@ -4727,14 +4356,12 @@ export function EditModelPage() {
 
                         {activeDetailPanel === "capabilities" && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[13px] font-bold tracking-wider text-fg/50 uppercase">
-                                {t("editModel.sections.capabilities")}
-                              </label>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-[12px] text-fg/45">{capabilitiesSummary}</p>
                               <button
                                 type="button"
                                 onClick={() => openDocs("imagegen", "model-capabilities")}
-                                className="text-fg/40 transition hover:text-fg/60"
+                                className="shrink-0 text-fg/40 transition hover:text-fg/60"
                                 aria-label={t("editModel.capabilities.helpLabel")}
                               >
                                 <HelpCircle size={14} />
@@ -4863,20 +4490,152 @@ export function EditModelPage() {
                         )}
                       </div>
                     </motion.div>
-                  ) : effectiveEditorViewMode === "simple" ? (
-                    <div
-                      className="rounded-lg border border-dashed border-fg/10 px-4 py-6 text-[13px] text-fg/45"
-                      style={{ order: 50 }}
-                    >
-                      {t("editModel.editorMode.emptyState")}
-                    </div>
-                  ) : null}
-                </motion.div>
-              </AnimatePresence>
+                  </AnimatePresence>
+              </div>
             </div>
           </div>
         </motion.div>
       </main>
+
+      {/* LAST RUNTIME REPORT DRAWER */}
+      <AnimatePresence>
+        {isLocalModel && llamaRuntimeReport && showLlamaRuntimeReport && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setShowLlamaRuntimeReport(false)}
+            />
+            <motion.aside
+              className="fixed inset-y-0 right-0 z-50 flex w-[480px] max-w-[90vw] flex-col border-l border-fg/10 bg-surface shadow-2xl"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-fg/10 px-5 py-4">
+                <div>
+                  <p className="text-base font-semibold text-fg">
+                    {t("editModel.runtime.lastReport")}
+                  </p>
+                  <p className="text-[12px] text-fg/50">{runtimePanelTitle}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLlamaRuntimeReport(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-fg/50 transition hover:bg-fg/8 hover:text-fg"
+                  aria-label={t("editModel.templateOverride.close")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                <div className="space-y-6">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                        llamaRuntimeReport.status === "succeeded"
+                          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-400"
+                          : llamaRuntimeReport.status === "cpuFallbackSucceeded"
+                            ? "border-warning/30 bg-warning/10 text-warning"
+                            : "border-danger/30 bg-danger/10 text-danger",
+                      )}
+                    >
+                      {llamaRuntimeReport.status === "succeeded" ||
+                      llamaRuntimeReport.status === "cpuFallbackSucceeded" ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-[13px] font-medium text-fg">
+                        {t(getLlamaRuntimeHeadlineKey(llamaRuntimeReport))}
+                      </p>
+                      <p className="text-[12px] leading-relaxed text-fg/55">
+                        {t(getLlamaRuntimeDetailKey(llamaRuntimeReport))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {llamaRuntimeReport.gpuFallbackReason && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-warning/90">
+                        {t("editModel.runtime.gpuFallbackReason")}
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-fg/72">
+                        {llamaRuntimeReport.gpuFallbackReason}
+                      </p>
+                    </div>
+                  )}
+
+                  {llamaRuntimeReport.errorMessage && (
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-danger/90">
+                        {t("editModel.runtime.finalError")}
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-fg/72">
+                        {llamaRuntimeReport.errorMessage}
+                      </p>
+                    </div>
+                  )}
+
+                  {llamaRuntimeFacts.length > 0 && (
+                    <div className="divide-y divide-fg/10 border-t border-fg/10">
+                      {llamaRuntimeFacts.map((item) => (
+                        <div
+                          key={item.label}
+                          className="flex items-start justify-between gap-4 py-2.5"
+                        >
+                          <div className="text-[12px] text-fg/50">{item.label}</div>
+                          <div className="wrap-break-word text-right text-[13px] text-fg/85">
+                            {item.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {llamaRuntimeReport.status === "cpuFallbackSucceeded" &&
+                    llamaRuntimeReport.suggestedSettings && (
+                      <div className="space-y-3 border-t border-fg/10 pt-5">
+                        <div className="space-y-1">
+                          <div className="text-[13px] font-medium text-fg">
+                            {t("editModel.runtime.workingRecoveryConfig")}
+                          </div>
+                          <p className="text-[12px] text-fg/52">
+                            {t("editModel.runtime.context")}{" "}
+                            {formatRuntimeNumber(
+                              llamaRuntimeReport.suggestedSettings.contextLength,
+                            ) ?? t("editModel.runtime.na")}
+                            {" • "}
+                            {t("editModel.runtime.batch")}{" "}
+                            {formatRuntimeNumber(
+                              llamaRuntimeReport.suggestedSettings.llamaBatchSize,
+                            ) ?? t("editModel.runtime.na")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleApplyLlamaRuntimeSuggestion()}
+                          disabled={saving}
+                          className="w-full rounded-lg border border-warning/30 bg-warning/12 px-3 py-2 text-[13px] font-medium text-warning transition hover:bg-warning/18 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {t("editModel.runtime.applyWorkingConfig")}
+                        </button>
+                      </div>
+                    )}
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* PARAMETER SUPPORT MODAL */}
       <BottomMenu
