@@ -70,7 +70,7 @@ export const changelog: ChangelogEntry[] = [
       {
         type: "feature",
         description:
-          "Added per-message info: optionally show the model name, input/output/total token counts, time-to-first-token, and tokens/sec under each message, each toggleable, with a choice of placement and text size.",
+          "Added per-message info: optionally show the model that generated each message, input/output/total token counts, time-to-first-token, and tokens/sec, each toggleable, with a choice of placement and text size.",
       },
       {
         type: "improvement",
