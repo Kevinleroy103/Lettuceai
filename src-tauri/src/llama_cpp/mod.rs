@@ -1122,6 +1122,7 @@ mod desktop {
                 available_memory_bytes,
                 available_vram_bytes,
                 max_ctx,
+                actual_gpu_layers_used.unwrap_or(0),
                 runtime_offload_kqv,
                 llama_kv_type_raw.as_deref(),
             );
@@ -1130,6 +1131,7 @@ mod desktop {
                     model,
                     available_memory_bytes,
                     max_ctx,
+                    actual_gpu_layers_used.unwrap_or(0),
                     llama_kv_type_raw.as_deref(),
                     None,
                     llama_batch_size,
@@ -1226,6 +1228,7 @@ mod desktop {
                     model,
                     available_memory_bytes,
                     max_ctx,
+                    actual_gpu_layers_used.unwrap_or(0),
                     llama_kv_type_raw.as_deref(),
                     requested_context,
                     llama_batch_size,
