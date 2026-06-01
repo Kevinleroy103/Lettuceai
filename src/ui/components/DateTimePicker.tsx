@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { cn, interactive } from "../design-tokens";
+import { NumberInput } from "./NumberInput";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTHS = [
@@ -17,9 +18,30 @@ const MONTHS = [
   "November",
   "December",
 ];
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const MIN_YEAR = 1;
+const MAX_YEAR = 9999;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function wrap(value: number, min: number, max: number): number {
+  const range = max - min + 1;
+  return (((value - min) % range) + range) % range + min;
 }
 
 function daysInMonth(year: number, month0: number): number {
@@ -37,8 +59,6 @@ function composeMs(
   return new Date(year, month0, safeDay, hour, minute, 0, 0).getTime();
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
 interface DateTimePickerProps {
   valueMs: number;
   onChange: (ms: number) => void;
@@ -46,6 +66,8 @@ interface DateTimePickerProps {
 }
 
 export function DateTimePicker({ valueMs, onChange, className }: DateTimePickerProps) {
+  const [view, setView] = useState<"days" | "months">("days");
+
   const current = new Date(valueMs);
   const year = current.getFullYear();
   const month0 = current.getMonth();
@@ -71,10 +93,16 @@ export function DateTimePicker({ valueMs, onChange, className }: DateTimePickerP
   };
 
   const pickDay = (d: number) => onChange(composeMs(year, month0, d, hour, minute));
-  const stepHour = (delta: number) =>
-    onChange(composeMs(year, month0, day, clamp(hour + delta, 0, 23), minute));
-  const stepMinute = (delta: number) =>
-    onChange(composeMs(year, month0, day, hour, clamp(minute + delta, 0, 59)));
+  const setHour = (h: number) =>
+    onChange(composeMs(year, month0, day, clamp(h, 0, 23), minute));
+  const setMinute = (m: number) =>
+    onChange(composeMs(year, month0, day, hour, clamp(m, 0, 59)));
+  const setYear = (y: number) =>
+    onChange(composeMs(clamp(y, MIN_YEAR, MAX_YEAR), month0, day, hour, minute));
+  const pickMonth = (m: number) => {
+    onChange(composeMs(year, m, day, hour, minute));
+    setView("days");
+  };
 
   const cellBase =
     "flex h-7 items-center justify-center rounded-md text-[12px] tabular-nums";
@@ -86,27 +114,53 @@ export function DateTimePicker({ valueMs, onChange, className }: DateTimePickerP
         className,
       )}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-1">
         <button
           type="button"
-          onClick={() => shiftMonth(-1)}
-          aria-label="Previous month"
+          onClick={() => (view === "days" ? shiftMonth(-1) : setYear(year - 1))}
+          aria-label={view === "days" ? "Previous month" : "Previous year"}
           className={cn(
-            "flex h-6 w-6 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
             interactive.transition.fast,
           )}
         >
           <ChevronLeft size={15} />
         </button>
-        <span className="text-[12px] font-semibold text-fg/80">
-          {MONTHS[month0]} {year}
-        </span>
+        {view === "days" ? (
+          <button
+            type="button"
+            onClick={() => setView("months")}
+            className={cn(
+              "rounded-md px-2 py-0.5 text-[12px] font-semibold text-fg/80 hover:bg-fg/10",
+              interactive.transition.fast,
+            )}
+          >
+            {MONTHS[month0]} {year}
+          </button>
+        ) : (
+          <NumberInput
+            value={year}
+            min={MIN_YEAR}
+            max={MAX_YEAR}
+            step={1}
+            onChange={(next) => {
+              if (next === null) return;
+              setYear(next);
+            }}
+            aria-label="Year"
+            className={cn(
+              "w-16 rounded-md bg-transparent text-center text-[12px] font-semibold tabular-nums text-fg/80",
+              "focus:bg-fg/10 focus:outline-none",
+              "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            )}
+          />
+        )}
         <button
           type="button"
-          onClick={() => shiftMonth(1)}
-          aria-label="Next month"
+          onClick={() => (view === "days" ? shiftMonth(1) : setYear(year + 1))}
+          aria-label={view === "days" ? "Next month" : "Next year"}
           className={cn(
-            "flex h-6 w-6 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
             interactive.transition.fast,
           )}
         >
@@ -114,49 +168,62 @@ export function DateTimePicker({ valueMs, onChange, className }: DateTimePickerP
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-0.5">
-        {WEEKDAYS.map((label) => (
-          <div
-            key={label}
-            className="flex h-5 items-center justify-center text-[9px] font-semibold uppercase tracking-wide text-fg/35"
-          >
-            {label}
-          </div>
-        ))}
-        {cells.map((cell, index) =>
-          cell === null ? (
-            <div key={`empty-${index}`} className={cellBase} />
-          ) : (
+      {view === "days" ? (
+        <div className="grid grid-cols-7 gap-0.5">
+          {WEEKDAYS.map((label) => (
+            <div
+              key={label}
+              className="flex h-5 items-center justify-center text-[9px] font-semibold uppercase tracking-wide text-fg/35"
+            >
+              {label}
+            </div>
+          ))}
+          {cells.map((cell, index) =>
+            cell === null ? (
+              <div key={`empty-${index}`} className={cellBase} />
+            ) : (
+              <button
+                key={`day-${cell}`}
+                type="button"
+                onClick={() => pickDay(cell)}
+                className={cn(
+                  cellBase,
+                  interactive.transition.fast,
+                  cell === day
+                    ? "bg-accent font-semibold text-black"
+                    : "text-fg/70 hover:bg-fg/10 hover:text-fg/90",
+                )}
+              >
+                {cell}
+              </button>
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1">
+          {MONTHS_SHORT.map((label, index) => (
             <button
-              key={`day-${cell}`}
+              key={label}
               type="button"
-              onClick={() => pickDay(cell)}
+              onClick={() => pickMonth(index)}
               className={cn(
-                cellBase,
+                "flex h-8 items-center justify-center rounded-md text-[12px] font-medium",
                 interactive.transition.fast,
-                cell === day
+                index === month0
                   ? "bg-accent font-semibold text-black"
                   : "text-fg/70 hover:bg-fg/10 hover:text-fg/90",
               )}
             >
-              {cell}
+              {label}
             </button>
-          ),
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-center gap-2 border-t border-fg/8 pt-2">
-        <TimeStepper
-          value={hour}
-          onStep={stepHour}
-          label="Hour"
-        />
+        <TimeStepper value={hour} min={0} max={23} onSet={setHour} label="Hour" />
         <span className="text-lg font-semibold text-fg/50">:</span>
-        <TimeStepper
-          value={minute}
-          onStep={stepMinute}
-          label="Minute"
-        />
+        <TimeStepper value={minute} min={0} max={59} onSet={setMinute} label="Minute" />
       </div>
     </div>
   );
@@ -164,26 +231,53 @@ export function DateTimePicker({ valueMs, onChange, className }: DateTimePickerP
 
 function TimeStepper({
   value,
-  onStep,
+  min,
+  max,
+  onSet,
   label,
 }: {
   value: number;
-  onStep: (delta: number) => void;
+  min: number;
+  max: number;
+  onSet: (value: number) => void;
   label: string;
 }) {
   const btn = cn(
-    "flex h-5 w-9 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
+    "flex h-5 w-12 items-center justify-center rounded-md text-fg/55 hover:bg-fg/10 hover:text-fg/85",
     interactive.transition.fast,
   );
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <button type="button" onClick={() => onStep(1)} aria-label={`Increase ${label}`} className={btn}>
+      <button
+        type="button"
+        onClick={() => onSet(wrap(value + 1, min, max))}
+        aria-label={`Increase ${label}`}
+        className={btn}
+      >
         <ChevronUp size={14} />
       </button>
-      <span className="w-9 text-center text-base font-semibold tabular-nums text-fg/90">
-        {pad(value)}
-      </span>
-      <button type="button" onClick={() => onStep(-1)} aria-label={`Decrease ${label}`} className={btn}>
+      <NumberInput
+        value={value}
+        min={min}
+        max={max}
+        step={1}
+        onChange={(next) => {
+          if (next === null) return;
+          onSet(next);
+        }}
+        aria-label={label}
+        className={cn(
+          "w-12 rounded-md bg-transparent text-center text-base font-semibold tabular-nums text-fg/90",
+          "focus:bg-fg/10 focus:outline-none",
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+        )}
+      />
+      <button
+        type="button"
+        onClick={() => onSet(wrap(value - 1, min, max))}
+        aria-label={`Decrease ${label}`}
+        className={btn}
+      >
         <ChevronDown size={14} />
       </button>
     </div>
