@@ -33,7 +33,7 @@ const MONTHS_SHORT = [
   "Dec",
 ];
 const MIN_YEAR = 1;
-const MAX_YEAR = 9999;
+const MAX_YEAR = 275759;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
