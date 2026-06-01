@@ -1213,7 +1213,9 @@ pub(crate) async fn select_relevant_memories(
     }
 
     let reference_ms = now_millis().unwrap_or_default();
-    let temporal_range = if temporal_query_features_enabled {
+    let temporal_range = if temporal_query_features_enabled
+        && companion_time_awareness_enabled(session)
+    {
         detect_temporal_query_range(query, reference_ms)
     } else {
         None
