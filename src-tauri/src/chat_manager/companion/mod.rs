@@ -1009,15 +1009,15 @@ fn apply_bipolar_delta(current: f64, raw_delta: f64, baseline: f64, cfg: &AxisDy
 }
 
 fn default_closeness() -> f64 {
-    0.2
+    0.1
 }
 
 fn default_trust() -> f64 {
-    0.3
+    0.1
 }
 
 fn default_affection() -> f64 {
-    0.15
+    0.05
 }
 
 #[cfg(test)]

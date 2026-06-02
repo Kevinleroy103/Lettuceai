@@ -373,7 +373,7 @@ export function CompanionRelationshipPage() {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <StatTile
                 label={t("chats.companionRelationship.closeness")}
-                value={relationshipState?.closeness ?? companion?.relationshipDefaults?.closeness ?? 0.2}
+                value={relationshipState?.closeness ?? companion?.relationshipDefaults?.closeness ?? 0.1}
                 baseline={companion?.relationshipDefaults?.closeness}
                 low={RELATIONSHIP_AXIS_ANCHORS.closeness.low}
                 mid={RELATIONSHIP_AXIS_ANCHORS.closeness.mid}
@@ -382,7 +382,7 @@ export function CompanionRelationshipPage() {
               />
               <StatTile
                 label={t("chats.companionRelationship.trust")}
-                value={relationshipState?.trust ?? companion?.relationshipDefaults?.trust ?? 0.3}
+                value={relationshipState?.trust ?? companion?.relationshipDefaults?.trust ?? 0.1}
                 baseline={companion?.relationshipDefaults?.trust}
                 low={RELATIONSHIP_AXIS_ANCHORS.trust.low}
                 mid={RELATIONSHIP_AXIS_ANCHORS.trust.mid}
@@ -391,7 +391,7 @@ export function CompanionRelationshipPage() {
               />
               <StatTile
                 label={t("chats.companionRelationship.affection")}
-                value={relationshipState?.affection ?? companion?.relationshipDefaults?.affection ?? 0.15}
+                value={relationshipState?.affection ?? companion?.relationshipDefaults?.affection ?? 0.05}
                 baseline={companion?.relationshipDefaults?.affection}
                 tone="warm"
                 low={RELATIONSHIP_AXIS_ANCHORS.affection.low}

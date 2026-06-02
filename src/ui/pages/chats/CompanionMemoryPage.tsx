@@ -1061,7 +1061,7 @@ export function CompanionMemoryPage() {
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-2">
               <StatTile
                 label="Closeness"
-                value={relationshipState?.closeness ?? companion?.relationshipDefaults?.closeness ?? 0.2}
+                value={relationshipState?.closeness ?? companion?.relationshipDefaults?.closeness ?? 0.1}
                 low={RELATIONSHIP_AXIS_ANCHORS.closeness.low}
                 mid={RELATIONSHIP_AXIS_ANCHORS.closeness.mid}
                 high={RELATIONSHIP_AXIS_ANCHORS.closeness.high}
@@ -1069,7 +1069,7 @@ export function CompanionMemoryPage() {
               />
               <StatTile
                 label="Trust"
-                value={relationshipState?.trust ?? companion?.relationshipDefaults?.trust ?? 0.3}
+                value={relationshipState?.trust ?? companion?.relationshipDefaults?.trust ?? 0.1}
                 low={RELATIONSHIP_AXIS_ANCHORS.trust.low}
                 mid={RELATIONSHIP_AXIS_ANCHORS.trust.mid}
                 high={RELATIONSHIP_AXIS_ANCHORS.trust.high}
@@ -1077,7 +1077,7 @@ export function CompanionMemoryPage() {
               />
               <StatTile
                 label="Affection"
-                value={relationshipState?.affection ?? companion?.relationshipDefaults?.affection ?? 0.15}
+                value={relationshipState?.affection ?? companion?.relationshipDefaults?.affection ?? 0.05}
                 tone="warm"
                 low={RELATIONSHIP_AXIS_ANCHORS.affection.low}
                 mid={RELATIONSHIP_AXIS_ANCHORS.affection.mid}
