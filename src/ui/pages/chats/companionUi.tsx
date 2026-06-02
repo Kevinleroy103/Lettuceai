@@ -51,6 +51,7 @@ export type CompanionMemoryItem = {
   category: CompanionMemoryCategory;
   createdAt: number;
   lastAccessedAt: number;
+  observedAt: number | null;
   isPinned: boolean;
   isCold: boolean;
   importanceScore: number;
@@ -99,6 +100,7 @@ export function buildCompanionMemoryItems(session?: Session | null): CompanionMe
         category: normalizeCompanionCategory(memory.category),
         createdAt: memory.createdAt || 0,
         lastAccessedAt: memory.lastAccessedAt || 0,
+        observedAt: memory.observedAt ?? null,
         isPinned: memory.isPinned ?? false,
         isCold: memory.isCold ?? false,
         importanceScore: memory.importanceScore ?? 1,
@@ -132,6 +134,7 @@ export function buildCompanionMemoryItems(session?: Session | null): CompanionMe
     category: "profile",
     createdAt: 0,
     lastAccessedAt: 0,
+    observedAt: null,
     isPinned: false,
     isCold: false,
     importanceScore: 1,

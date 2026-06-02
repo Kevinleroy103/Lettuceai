@@ -117,6 +117,7 @@ macro_rules! invoke_handler {
             crate::storage_manager::sessions::session_update_memory,
             crate::storage_manager::sessions::session_toggle_memory_pin,
             crate::storage_manager::sessions::session_set_memory_cold_state,
+            crate::storage_manager::sessions::session_set_memory_observed_at,
             crate::storage_manager::usage::storage_clear_all,
             crate::storage_manager::usage::storage_reset_database,
             crate::storage_manager::usage::storage_usage_summary,

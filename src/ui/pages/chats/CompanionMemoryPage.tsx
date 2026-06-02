@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bot,
   Brain,
+  CalendarClock,
   ChevronDown,
   Clock3,
   Heart,
@@ -40,10 +41,12 @@ import {
   removeMemory,
   saveSession,
   setMemoryColdState,
+  setMemoryObservedAt,
   toggleMemoryPin,
   updateMemory,
 } from "../../../core/storage/repo";
 import { BottomMenu } from "../../components/BottomMenu";
+import { DateTimePicker } from "../../components/DateTimePicker";
 import {
   companionCategoryLabel,
   COMPANION_CATEGORY_ORDER,
@@ -245,6 +248,7 @@ type CardProps = {
   onCancelEdit: () => void;
   onTogglePin: (memory: CompanionMemoryItem) => void;
   onToggleCold: (memory: CompanionMemoryItem) => void;
+  onEditDate: (memory: CompanionMemoryItem) => void;
   onDelete: (memory: CompanionMemoryItem) => void;
 };
 
@@ -264,6 +268,7 @@ function MemoryCard({
   onCancelEdit,
   onTogglePin,
   onToggleCold,
+  onEditDate,
   onDelete,
 }: CardProps) {
   const { t } = useI18n();
@@ -405,8 +410,19 @@ function MemoryCard({
                 </div>
               ) : null}
 
-              {!editing && (memory.factSignature || memory.supersedes.length || memory.supersededAt || memory.lastAccessedAt) ? (
+              {!editing &&
+              (memory.factSignature ||
+                memory.supersedes.length ||
+                memory.supersededAt ||
+                memory.lastAccessedAt ||
+                memory.observedAt) ? (
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-fg/40">
+                  {memory.observedAt ? (
+                    <span className="inline-flex items-center gap-1 text-fg/55">
+                      <CalendarClock size={10} />
+                      Dated {formatRelativeTime(t, memory.observedAt)}
+                    </span>
+                  ) : null}
                   {memory.lastAccessedAt ? (
                     <span>Last used {formatRelativeTime(t, memory.lastAccessedAt)}</span>
                   ) : null}
@@ -451,6 +467,12 @@ function MemoryCard({
                       icon={Save}
                       label="Edit"
                       onClick={() => onStartEdit(memory)}
+                      disabled={actionBusy}
+                    />
+                    <ActionPill
+                      icon={CalendarClock}
+                      label="Date"
+                      onClick={() => onEditDate(memory)}
                       disabled={actionBusy}
                     />
                     <ActionPill
@@ -825,6 +847,29 @@ export function CompanionMemoryPage() {
       }
     },
     [session?.id, session?.memoryEmbeddings?.length, setSession],
+  );
+
+  const [dateMenuMemory, setDateMenuMemory] = useState<CompanionMemoryItem | null>(null);
+  const [dateDraftMs, setDateDraftMs] = useState(() => Date.now());
+
+  const startEditDate = useCallback((memory: CompanionMemoryItem) => {
+    setDateDraftMs(memory.observedAt ?? Date.now());
+    setDateMenuMemory(memory);
+  }, []);
+
+  const commitObservedAt = useCallback(
+    async (observedAt: number | null) => {
+      if (!session?.id || !dateMenuMemory) return;
+      setActionBusyId(dateMenuMemory.id);
+      try {
+        const updated = await setMemoryObservedAt(session.id, dateMenuMemory.index, observedAt);
+        if (updated) setSession(updated);
+      } finally {
+        setActionBusyId(null);
+        setDateMenuMemory(null);
+      }
+    },
+    [session?.id, dateMenuMemory, setSession],
   );
 
   if (loading) {
@@ -1277,6 +1322,7 @@ export function CompanionMemoryPage() {
                       onCancelEdit={cancelEdit}
                       onTogglePin={(item) => void handleTogglePin(item)}
                       onToggleCold={(item) => void handleToggleCold(item)}
+                      onEditDate={(item) => startEditDate(item)}
                       onDelete={(item) => void handleDeleteMemory(item)}
                     />
                   ))}
@@ -1371,6 +1417,57 @@ export function CompanionMemoryPage() {
           >
             {genRecentText || "Waiting for output…"}
           </pre>
+        </div>
+      </BottomMenu>
+
+      <BottomMenu
+        isOpen={dateMenuMemory !== null}
+        onClose={() => setDateMenuMemory(null)}
+        title="Memory date"
+      >
+        <div className="space-y-4 text-fg">
+          <p className="text-xs text-fg/50">
+            Set when this memory happened. The companion reads recency from this date, so it
+            stays correct as the conversation moves forward.
+          </p>
+          <DateTimePicker valueMs={dateDraftMs} onChange={setDateDraftMs} />
+          <div className="flex gap-2">
+            {dateMenuMemory?.observedAt != null ? (
+              <button
+                onClick={() => void commitObservedAt(null)}
+                className={cn(
+                  "px-4 py-2.5",
+                  radius.lg,
+                  "border border-fg/10 bg-fg/5 text-sm font-medium text-fg/60",
+                  "transition-all hover:border-fg/15 hover:bg-fg/8 hover:text-fg/80 active:scale-[0.98]",
+                )}
+              >
+                Clear
+              </button>
+            ) : null}
+            <button
+              onClick={() => setDateMenuMemory(null)}
+              className={cn(
+                "flex-1 px-4 py-2.5",
+                radius.lg,
+                "border border-fg/10 bg-fg/5 text-sm font-medium text-fg/60",
+                "transition-all hover:border-fg/15 hover:bg-fg/8 hover:text-fg/80 active:scale-[0.98]",
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void commitObservedAt(dateDraftMs)}
+              className={cn(
+                "flex-1 px-4 py-2.5 flex items-center justify-center gap-2",
+                radius.lg,
+                "border border-emerald-400/30 bg-emerald-500/15 text-sm font-semibold text-emerald-200",
+                "transition-all hover:border-emerald-400/50 hover:bg-emerald-500/25 active:scale-[0.98]",
+              )}
+            >
+              Save
+            </button>
+          </div>
         </div>
       </BottomMenu>
     </div>

@@ -427,6 +427,16 @@ export const storageBridge = {
     invoke<string | null>("session_set_memory_cold_state", { sessionId, memoryIndex, isCold }).then(
       (s) => (typeof s === "string" ? JSON.parse(s) : null),
     ),
+  sessionSetMemoryObservedAt: (
+    sessionId: string,
+    memoryIndex: number,
+    observedAt: number | null,
+  ) =>
+    invoke<string | null>("session_set_memory_observed_at", {
+      sessionId,
+      memoryIndex,
+      observedAt,
+    }).then((s) => (typeof s === "string" ? JSON.parse(s) : null)),
 
   // Messages (paged)
   messagesList: (sessionId: string, limit: number, beforeCreatedAt?: number, beforeId?: string) =>

@@ -3877,3 +3877,77 @@ pub fn session_set_memory_cold_state(
     }
     Ok(None)
 }
+
+#[tauri::command]
+pub fn session_set_memory_observed_at(
+    app: tauri::AppHandle,
+    session_id: String,
+    memory_index: usize,
+    observed_at: Option<u64>,
+) -> Result<Option<String>, String> {
+    let mut conn = open_db(&app)?;
+
+    let memories_json = read_session_memories_json_with_resolution(&conn, &session_id)?;
+    let memories: Vec<String> = serde_json::from_str(&memories_json).unwrap_or_default();
+    let mut memory_embeddings = read_session_embeddings_with_fallback(&conn, &session_id)?;
+
+    if memory_index >= memories.len() {
+        if let Some(json) = read_session_meta(&conn, &session_id)? {
+            return Ok(Some(serde_json::to_string(&json).map_err(|e| {
+                crate::utils::err_to_string(module_path!(), line!(), e)
+            })?));
+        }
+        return Ok(None);
+    }
+
+    let now_u = now_ms();
+
+    while memory_embeddings.len() <= memory_index {
+        let idx = memory_embeddings.len();
+        let text = memories.get(idx).cloned().unwrap_or_default();
+        memory_embeddings.push(MemoryEmbedding {
+            id: uuid::Uuid::new_v4().to_string(),
+            text,
+            embedding: Vec::new(),
+            created_at: now_u,
+            token_count: 0,
+            is_cold: false,
+            last_accessed_at: now_u,
+            importance_score: 1.0,
+            persistence_importance: 1.0,
+            prompt_importance: 1.0,
+            volatility: 0.4,
+            is_pinned: false,
+            access_count: 0,
+            embedding_source_version: None,
+            embedding_dimensions: None,
+            match_score: None,
+            category: None,
+            observed_at: None,
+            observed_time_precision: None,
+            canonical_entities: Vec::new(),
+            fact_signature: None,
+            fact_polarity: None,
+            source_role: None,
+            source_message_id: None,
+            superseded_by: None,
+            superseded_at: None,
+            supersedes: Vec::new(),
+        });
+    }
+
+    {
+        let m = &mut memory_embeddings[memory_index];
+        m.observed_at = observed_at;
+        m.observed_time_precision = observed_at.map(|_| "user".to_string());
+    }
+
+    write_session_embeddings_through_table(&mut *conn, &session_id, &memory_embeddings)?;
+
+    if let Some(json) = read_session_meta(&conn, &session_id)? {
+        return Ok(Some(serde_json::to_string(&json).map_err(|e| {
+            crate::utils::err_to_string(module_path!(), line!(), e)
+        })?));
+    }
+    Ok(None)
+}

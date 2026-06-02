@@ -1736,6 +1736,20 @@ export async function toggleMemoryPin(
   return updated ? SessionSchema.parse(updated) : null;
 }
 
+export async function setMemoryObservedAt(
+  sessionId: string,
+  memoryIndex: number,
+  observedAt: number | null,
+): Promise<Session | null> {
+  const updated = await storageBridge.sessionSetMemoryObservedAt(
+    sessionId,
+    memoryIndex,
+    observedAt,
+  );
+  broadcastSessionUpdated();
+  return updated ? SessionSchema.parse(updated) : null;
+}
+
 // Group Session Memory CRUD Operations
 export async function groupSessionAddMemory(
   sessionId: string,
