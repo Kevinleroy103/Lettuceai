@@ -3101,9 +3101,9 @@ export const CompanionSoulSchema = z.object({
 export type CompanionSoul = z.infer<typeof CompanionSoulSchema>;
 
 export const CompanionRelationshipDefaultsSchema = z.object({
-  closeness: z.number().min(0).max(1).default(0.2),
-  trust: z.number().min(0).max(1).default(0.3),
-  affection: z.number().min(0).max(1).default(0.15),
+  closeness: z.number().min(-1).max(1).default(0.2),
+  trust: z.number().min(-1).max(1).default(0.3),
+  affection: z.number().min(-1).max(1).default(0.15),
   tension: z.number().min(0).max(1).default(0),
 });
 export type CompanionRelationshipDefaults = z.infer<typeof CompanionRelationshipDefaultsSchema>;
@@ -3267,9 +3267,9 @@ const DEFAULT_COMPANION_EMOTIONAL_STATE: CompanionEmotionalState = {
 };
 
 export const CompanionRelationshipStateSchema = z.object({
-  closeness: z.number().min(0).max(1).default(0.2),
-  trust: z.number().min(0).max(1).default(0.3),
-  affection: z.number().min(0).max(1).default(0.15),
+  closeness: z.number().min(-1).max(1).default(0.2),
+  trust: z.number().min(-1).max(1).default(0.3),
+  affection: z.number().min(-1).max(1).default(0.15),
   tension: z.number().min(0).max(1).default(0),
   stability: z.number().min(0).max(1).default(0.5),
   interactionCount: z.number().int().min(0).default(0),
