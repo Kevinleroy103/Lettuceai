@@ -102,7 +102,10 @@ export function GroupChatLayout() {
           readSettings(),
         ]);
         const groupData = sessionData?.groupCharacterId
-          ? await getGroup(sessionData.groupCharacterId).catch(() => null)
+          ? await getGroup(sessionData.groupCharacterId).catch((err) => {
+              console.error("GroupChatLayout: failed to load group", err);
+              return null;
+            })
           : null;
         if (!cancelled) {
           setSession(sessionData);
@@ -113,7 +116,7 @@ export function GroupChatLayout() {
           const globalAppearance =
             settingsData.advancedSettings?.chatAppearance ?? createDefaultChatAppearanceSettings();
           setBaseChatAppearance(
-            mergeChatAppearance(globalAppearance, groupData?.chatAppearance),
+            mergeChatAppearance(globalAppearance, groupData?.chatAppearance ?? undefined),
           );
         }
       } catch (err) {
@@ -191,7 +194,9 @@ export function GroupChatLayout() {
       setGroup(nextGroup);
       const globalAppearance =
         settings?.advancedSettings?.chatAppearance ?? createDefaultChatAppearanceSettings();
-      setBaseChatAppearance(mergeChatAppearance(globalAppearance, nextGroup?.chatAppearance));
+      setBaseChatAppearance(
+        mergeChatAppearance(globalAppearance, nextGroup?.chatAppearance ?? undefined),
+      );
     },
     [settings],
   );

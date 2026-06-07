@@ -34,7 +34,7 @@ pub struct Group {
     pub speaker_selection_method: String,
     #[serde(default = "default_memory_type")]
     pub memory_type: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chat_appearance: Option<serde_json::Value>,
 }
 
