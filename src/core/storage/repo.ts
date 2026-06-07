@@ -1135,6 +1135,18 @@ export async function updateGroupDisableCharacterLorebooks(
   return GroupSchema.parse(data);
 }
 
+export async function updateGroupChatAppearance(
+  groupId: string,
+  chatAppearance: Record<string, unknown> | null,
+): Promise<Group> {
+  const data = await storageBridge.groupUpdateChatAppearance(
+    groupId,
+    chatAppearance ? JSON.stringify(chatAppearance) : null,
+  );
+  broadcastSessionUpdated();
+  return GroupSchema.parse(data);
+}
+
 export async function listGroupSessionLorebooks(sessionId: string): Promise<Lorebook[]> {
   const data = await storageBridge.groupSessionLorebooksList(sessionId);
   return z.array(LorebookSchema).parse(data);

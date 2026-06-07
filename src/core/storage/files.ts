@@ -679,6 +679,11 @@ export const storageBridge = {
       id,
       startingSceneJson: startingScene ? JSON.stringify(startingScene) : null,
     }) as Promise<void>,
+  groupUpdateChatAppearance: (id: string, chatAppearanceJson: string | null) =>
+    invoke<string>("group_update_chat_appearance", {
+      id,
+      chatAppearanceJson,
+    }).then((s) => JSON.parse(s)),
   groupCreateSession: (groupId: string) =>
     invoke<string>("group_create_session", { groupId }).then((s) => JSON.parse(s)),
 

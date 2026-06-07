@@ -368,6 +368,7 @@ macro_rules! invoke_handler {
             crate::storage_manager::group_characters::group_update_persona,
             crate::storage_manager::group_characters::group_update_speaker_selection_method,
             crate::storage_manager::group_characters::group_update_memory_type,
+            crate::storage_manager::group_characters::group_update_chat_appearance,
             crate::storage_manager::group_characters::group_update_background_image,
             crate::storage_manager::group_characters::group_update_character_ids,
             crate::storage_manager::group_characters::group_update_muted_character_ids,

@@ -34,6 +34,8 @@ pub struct Group {
     pub speaker_selection_method: String,
     #[serde(default = "default_memory_type")]
     pub memory_type: String,
+    #[serde(default)]
+    pub chat_appearance: Option<serde_json::Value>,
 }
 
 fn default_memory_type() -> String {
@@ -96,7 +98,8 @@ fn read_group(conn: &Connection, id: &str) -> Result<Option<Group>, String> {
                     background_image_path, COALESCE(lorebook_ids, '[]'),
                     COALESCE(disable_character_lorebooks, 0),
                     COALESCE(speaker_selection_method, 'llm'),
-                    COALESCE(memory_type, 'manual')
+                    COALESCE(memory_type, 'manual'),
+                    chat_appearance
              FROM group_characters
              WHERE id = ?1",
         )
@@ -135,6 +138,13 @@ fn read_group(conn: &Connection, id: &str) -> Result<Option<Group>, String> {
             .unwrap_or_else(|| "[]".to_string());
         let lorebook_ids: Vec<String> =
             serde_json::from_str(&lorebook_ids_json).unwrap_or_default();
+
+        let chat_appearance_json: Option<String> = row
+            .get(15)
+            .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+        let chat_appearance: Option<serde_json::Value> = chat_appearance_json
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .filter(|v: &serde_json::Value| v.is_object());
 
         Ok(Some(Group {
             id: row
@@ -176,6 +186,7 @@ fn read_group(conn: &Connection, id: &str) -> Result<Option<Group>, String> {
             memory_type: row
                 .get(14)
                 .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?,
+            chat_appearance,
         }))
     } else {
         Ok(None)
@@ -353,6 +364,7 @@ pub fn group_create(
         disable_character_lorebooks: false,
         speaker_selection_method: selection_method,
         memory_type: "manual".to_string(),
+        chat_appearance: None,
     };
 
     serde_json::to_string(&item)
@@ -505,6 +517,7 @@ pub fn group_update(
         disable_character_lorebooks: existing.disable_character_lorebooks,
         speaker_selection_method: next_speaker_selection_method,
         memory_type: existing.memory_type,
+        chat_appearance: existing.chat_appearance,
     };
 
     serde_json::to_string(&updated)
@@ -573,6 +586,26 @@ pub fn group_update_memory_type(
     )
     .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn group_update_chat_appearance(
+    id: String,
+    chat_appearance_json: Option<String>,
+    pool: State<'_, SwappablePool>,
+) -> Result<String, String> {
+    let conn = pool.get_connection()?;
+    let now = now_ms() as i64;
+    conn.execute(
+        "UPDATE group_characters SET chat_appearance = ?1, updated_at = ?2 WHERE id = ?3",
+        params![chat_appearance_json, now, id],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    let refreshed = read_group(&conn, &id)?
+        .ok_or_else(|| crate::utils::err_msg(module_path!(), line!(), "Group not found"))?;
+    serde_json::to_string(&refreshed)
+        .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))
 }
 
 #[tauri::command]

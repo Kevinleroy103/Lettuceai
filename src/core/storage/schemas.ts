@@ -2462,6 +2462,7 @@ export const GroupSchema = z.object({
   disableCharacterLorebooks: z.boolean().default(false),
   speakerSelectionMethod: z.enum(["llm", "heuristic", "round_robin"]).default("llm"),
   memoryType: z.enum(["manual", "dynamic"]).default("manual"),
+  chatAppearance: z.lazy(() => ChatAppearanceOverrideSchema).optional(),
 });
 export type Group = z.infer<typeof GroupSchema>;
 

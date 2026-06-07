@@ -1983,6 +1983,7 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
     let mut has_group_character_lorebook_ids = false;
     let mut has_group_character_disable_lorebooks = false;
+    let mut has_group_character_chat_appearance = false;
     let mut rows_group_characters = stmt_group_characters
         .query([])
         .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
@@ -1997,6 +1998,8 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
             has_group_character_lorebook_ids = true;
         } else if col_name == "disable_character_lorebooks" {
             has_group_character_disable_lorebooks = true;
+        } else if col_name == "chat_appearance" {
+            has_group_character_chat_appearance = true;
         }
     }
     if !has_group_character_lorebook_ids {
@@ -2008,6 +2011,12 @@ pub fn init_db(_app: &tauri::AppHandle, conn: &Connection) -> Result<(), String>
     if !has_group_character_disable_lorebooks {
         let _ = conn.execute(
             "ALTER TABLE group_characters ADD COLUMN disable_character_lorebooks INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+    if !has_group_character_chat_appearance {
+        let _ = conn.execute(
+            "ALTER TABLE group_characters ADD COLUMN chat_appearance TEXT",
             [],
         );
     }
