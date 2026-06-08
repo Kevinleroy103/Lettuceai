@@ -150,6 +150,9 @@ export function GroupChatPage() {
   const isAtBottomRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const activeRequestIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<GroupMessage[]>([]);
+  const hasMoreOlderRef = useRef(true);
+  const loadingOlderRef = useRef(false);
   const isGenerating = sending || regeneratingMessageId !== null;
 
   // Shared data from layout (stays mounted across sub-route navigations)
@@ -228,22 +231,6 @@ export function GroupChatPage() {
     }
   }, [isMobilePlatform, navigate, session]);
 
-  const jumpToMessageId = searchParams.get("jumpToMessage");
-  useEffect(() => {
-    if (!jumpToMessageId || messages.length === 0) return;
-    const el = document.getElementById(`group-msg-${jumpToMessageId}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ring-2", "ring-accent", "rounded-xl");
-    const timer = window.setTimeout(() => {
-      el.classList.remove("ring-2", "ring-accent", "rounded-xl");
-    }, 2000);
-    const next = new URLSearchParams(searchParams);
-    next.delete("jumpToMessage");
-    setSearchParams(next, { replace: true });
-    return () => window.clearTimeout(timer);
-  }, [jumpToMessageId, messages.length, searchParams, setSearchParams]);
-
   // Load messages and stats (session, characters, personas, settings come from layout)
   const loadData = useCallback(async () => {
     if (!groupSessionId) return;
@@ -255,6 +242,8 @@ export function GroupChatPage() {
       ]);
 
       setMessages(msgs);
+      messagesRef.current = msgs;
+      hasMoreOlderRef.current = msgs.length >= MESSAGES_PAGE_SIZE;
       setParticipationStats(stats);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.labels.loading"));
@@ -266,6 +255,98 @@ export function GroupChatPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const loadOlderGroupMessages = useCallback(async () => {
+    if (!groupSessionId) return;
+    if (loadingOlderRef.current || !hasMoreOlderRef.current) return;
+    const first = messagesRef.current[0];
+    if (!first) return;
+    loadingOlderRef.current = true;
+    try {
+      const older: GroupMessage[] = await storageBridge.groupMessagesList(
+        groupSessionId,
+        MESSAGES_PAGE_SIZE,
+        first.createdAt,
+        first.id,
+      );
+      if (older.length === 0) {
+        hasMoreOlderRef.current = false;
+        return;
+      }
+      hasMoreOlderRef.current = older.length >= MESSAGES_PAGE_SIZE;
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const merged = [...older.filter((m) => !seen.has(m.id)), ...prev];
+        messagesRef.current = merged;
+        return merged;
+      });
+    } catch (err) {
+      console.warn("GroupChatPage: failed to load older messages", err);
+    } finally {
+      loadingOlderRef.current = false;
+    }
+  }, [groupSessionId]);
+
+  const ensureGroupMessageLoaded = useCallback(
+    async (messageId: string) => {
+      for (let i = 0; i < 20; i += 1) {
+        if (messagesRef.current.some((m) => m.id === messageId)) return;
+        if (!hasMoreOlderRef.current) return;
+        await loadOlderGroupMessages();
+      }
+    },
+    [loadOlderGroupMessages],
+  );
+
+  const jumpToMessageId = searchParams.get("jumpToMessage");
+  useEffect(() => {
+    if (!jumpToMessageId || loading) return;
+
+    let cancelled = false;
+    let rafId: number | null = null;
+    let highlightTimeoutId: number | null = null;
+
+    const run = async () => {
+      await ensureGroupMessageLoaded(jumpToMessageId);
+      if (cancelled) return;
+
+      let tries = 0;
+      const tryScroll = () => {
+        if (cancelled) return;
+        const el = document.getElementById(`group-msg-${jumpToMessageId}`);
+        if (el) {
+          isAtBottomRef.current = false;
+          setIsAtBottom(false);
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("ring-2", "ring-accent", "rounded-xl");
+          highlightTimeoutId = window.setTimeout(() => {
+            el.classList.remove("ring-2", "ring-accent", "rounded-xl");
+          }, 2000);
+          const next = new URLSearchParams(searchParams);
+          next.delete("jumpToMessage");
+          setSearchParams(next, { replace: true });
+          return;
+        }
+        tries += 1;
+        if (tries < 30) {
+          rafId = window.requestAnimationFrame(tryScroll);
+        }
+      };
+      rafId = window.requestAnimationFrame(tryScroll);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      if (highlightTimeoutId !== null) window.clearTimeout(highlightTimeoutId);
+    };
+  }, [jumpToMessageId, loading, ensureGroupMessageLoaded, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!error) return;
