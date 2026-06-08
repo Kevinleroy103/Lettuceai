@@ -26,6 +26,8 @@ import { uuidv4 } from "../../../../../../core/storage/repo";
 import { useImageData } from "../../../../../hooks/useImageData";
 import { WIDGET_TYPE_LABEL } from "./widgetFactories";
 import { useWidgetEdit } from "../WidgetEditContext";
+import { useWidgetContext } from "../WidgetContext";
+import type { CharacterInfoNode } from "../../../../../../core/storage/chatWidgetSchemas";
 
 const makeId = () => uuidv4();
 
@@ -193,6 +195,12 @@ function renderBody(
     case "box":
       return <BoxForm node={draft} setNode={setDraft} />;
     case "character_info":
+      return (
+        <>
+          <CharacterInfoForm node={draft} setNode={setDraft} />
+          {design}
+        </>
+      );
     case "persona_info":
       return design;
     case "scratch_pad":
@@ -280,6 +288,33 @@ function renderBody(
         </>
       );
   }
+}
+
+function CharacterInfoForm({
+  node,
+  setNode,
+}: {
+  node: CharacterInfoNode;
+  setNode: (n: CharacterInfoNode) => void;
+}) {
+  const { characters } = useWidgetContext();
+  if (!characters || characters.length === 0) return null;
+  return (
+    <Field label="Character" hint="Which group member this card shows.">
+      <select
+        className={TEXT_INPUT_CLASS}
+        value={node.characterId ?? ""}
+        onChange={(e) => setNode({ ...node, characterId: e.target.value || undefined })}
+      >
+        <option value="">First member (default)</option>
+        {characters.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
 }
 
 function AuthorNoteForm({

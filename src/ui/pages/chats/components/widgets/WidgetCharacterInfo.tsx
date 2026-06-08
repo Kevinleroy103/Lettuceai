@@ -5,7 +5,10 @@ import { useWidgetContext } from "./WidgetContext";
 import { widgetCardClass } from "./widgetSurface";
 
 export function WidgetCharacterInfo({ node }: { node: CharacterInfoNode }) {
-  const { character, hasBackground } = useWidgetContext();
+  const { character: contextCharacter, characters, hasBackground } = useWidgetContext();
+  const character = node.characterId
+    ? (characters?.find((c) => c.id === node.characterId) ?? contextCharacter)
+    : contextCharacter;
 
   if (!character) {
     return (

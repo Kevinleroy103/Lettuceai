@@ -51,6 +51,7 @@ export interface BoxNode extends NodeBase {
 
 export interface CharacterInfoNode extends NodeBase {
   type: "character_info";
+  characterId?: string;
 }
 
 export interface PersonaInfoNode extends NodeBase {
@@ -199,6 +200,7 @@ export const widgetNodeSchema: z.ZodType<WidgetNode> = z.lazy(() =>
       id: z.string(),
       design: z.enum(["default", "minimal", "solid", "outline"]).optional(),
       type: z.literal("character_info"),
+      characterId: z.string().optional(),
     }),
     z.object({
       id: z.string(),

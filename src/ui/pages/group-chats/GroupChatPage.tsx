@@ -14,6 +14,7 @@ import {
   toggleGroupMessagePin,
   updateGroupChatAppearance,
   updateGroupSessionAuthorNote,
+  saveCharacter,
 } from "../../../core/storage/repo";
 import { useI18n } from "../../../core/i18n/context";
 import type {
@@ -22,6 +23,7 @@ import type {
   GroupParticipation,
   ImageAttachment,
   Model,
+  Session,
 } from "../../../core/storage/schemas";
 import { radius, interactive, cn } from "../../design-tokens";
 import { useGroupChatLayoutContext } from "./GroupChatLayout";
@@ -186,6 +188,7 @@ export function GroupChatPage() {
     updateSession,
     group,
     updateGroup,
+    reloadSession,
     setDraftAppearanceOverride,
     registerAppearanceFieldUpdater,
   } = useGroupChatLayoutContext();
@@ -1815,10 +1818,14 @@ export function GroupChatPage() {
     const lastAssistant = [...messages]
       .reverse()
       .find((m) => m.role === "assistant" && !m.id.startsWith("placeholder"));
+    const contextCharacter = widgetCharacter
+      ? { ...widgetCharacter, memoryType: session?.memoryType ?? widgetCharacter.memoryType }
+      : null;
     return {
-      character: widgetCharacter,
+      character: contextCharacter,
+      characters: groupCharacters,
       persona: currentPersona,
-      session: null,
+      session: (session as unknown as Session) ?? null,
       hasBackground: !!backgroundImageData,
       messageCount: messages.filter((m) => !m.id.startsWith("placeholder")).length,
       sceneName: null,
@@ -1832,9 +1839,26 @@ export function GroupChatPage() {
       canRegenerate: !!lastAssistant && !sending,
       canContinue: messages.length > 0 && !sending,
       isGenerating: sending,
-      onSelectPersona: () => {},
-      onSelectModel: () => {},
-      onSelectFallbackModel: () => {},
+      onSelectPersona: async (personaId) => {
+        if (!session) return;
+        const updated = await storageBridge.groupSessionUpdate(
+          session.id,
+          session.name,
+          session.characterIds,
+          personaId ?? null,
+        );
+        updateSession(updated);
+      },
+      onSelectModel: async (modelId) => {
+        if (!widgetCharacter) return;
+        await saveCharacter({ id: widgetCharacter.id, defaultModelId: modelId ?? null });
+        reloadSession();
+      },
+      onSelectFallbackModel: async (modelId) => {
+        if (!widgetCharacter) return;
+        await saveCharacter({ id: widgetCharacter.id, fallbackModelId: modelId });
+        reloadSession();
+      },
       onAuthorNoteSaved: () => {},
       onRegenerate: async () => {
         if (lastAssistant) await handleRegenerate(lastAssistant.id);
@@ -1873,6 +1897,7 @@ export function GroupChatPage() {
     };
   }, [
     widgetCharacter,
+    groupCharacters,
     currentPersona,
     backgroundImageData,
     messages,
@@ -1883,6 +1908,7 @@ export function GroupChatPage() {
     group,
     updateGroup,
     updateSession,
+    reloadSession,
     handleRegenerate,
     handleContinue,
     handleAbort,

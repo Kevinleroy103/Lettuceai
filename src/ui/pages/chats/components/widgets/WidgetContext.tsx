@@ -9,6 +9,8 @@ import type {
 
 export interface WidgetActionContext {
   character: Character | null;
+  /** Group members, when in a group chat — enables per-widget character targeting. */
+  characters?: Character[];
   persona: Persona | null;
   session: Session | null;
   hasBackground: boolean;
