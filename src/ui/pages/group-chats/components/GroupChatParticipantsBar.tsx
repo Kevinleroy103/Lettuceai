@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { VolumeX, Clapperboard } from "lucide-react";
+import { VolumeX, Clapperboard, Check, X } from "lucide-react";
 import { useI18n } from "../../../../core/i18n/context";
 import type { Character } from "../../../../core/storage/schemas";
 import { cn } from "../../../design-tokens";
@@ -82,7 +82,10 @@ interface GroupChatParticipantsBarProps {
   align?: ParticipantsBarAlign;
   directorMode?: boolean;
   selectedId?: string | null;
+  actionSide?: "left" | "right";
   onSelectSpeaker?: (characterId: string) => void;
+  onConfirmSpeaker?: (characterId: string) => void;
+  onCancelSpeaker?: () => void;
 }
 
 export function GroupChatParticipantsBar({
@@ -97,7 +100,10 @@ export function GroupChatParticipantsBar({
   align = "left",
   directorMode = false,
   selectedId = null,
+  actionSide = "right",
   onSelectSpeaker,
+  onConfirmSpeaker,
+  onCancelSpeaker,
 }: GroupChatParticipantsBarProps) {
   const { t } = useI18n();
   const mentionedIds = useMemo(() => {
@@ -143,29 +149,49 @@ export function GroupChatParticipantsBar({
           ALIGN_CLASS[align],
         )}
       >
-        {characters.map((character) => (
-          <ParticipantAvatar
-            key={character.id}
-            character={character}
-            muted={mutedCharacterIds.has(character.id)}
-            mentioned={mentionedIds.has(character.id)}
-            selected={directorMode && selectedId === character.id}
-            dimmed={
-              mutedCharacterIds.has(character.id) ||
-              (hasActiveMention && !mentionedIds.has(character.id)) ||
-              (directorMode && !!selectedId && selectedId !== character.id)
-            }
-            disabled={disabled}
-            sizeClass={SIZE_CLASS[size]}
-            directorMode={directorMode}
-            onMention={() =>
-              directorMode
-                ? onSelectSpeaker?.(character.id)
-                : setDraft(toggleMention(draft, character.name))
-            }
-            onToggleMute={(muted) => onToggleMute(character.id, muted)}
-          />
-        ))}
+        {characters.map((character) => {
+          const isSelected = directorMode && selectedId === character.id;
+          const otherSelected = directorMode && !!selectedId && selectedId !== character.id;
+          const avatar = (
+            <ParticipantAvatar
+              character={character}
+              muted={mutedCharacterIds.has(character.id)}
+              mentioned={mentionedIds.has(character.id)}
+              selected={isSelected}
+              dimmed={
+                mutedCharacterIds.has(character.id) ||
+                (hasActiveMention && !mentionedIds.has(character.id)) ||
+                otherSelected
+              }
+              disabled={disabled || otherSelected}
+              sizeClass={SIZE_CLASS[size]}
+              directorMode={directorMode}
+              onMention={() =>
+                directorMode
+                  ? onSelectSpeaker?.(character.id)
+                  : setDraft(toggleMention(draft, character.name))
+              }
+              onToggleMute={(muted) => onToggleMute(character.id, muted)}
+            />
+          );
+          const actions = (
+            <DirectorActions
+              onConfirm={() => onConfirmSpeaker?.(character.id)}
+              onCancel={() => onCancelSpeaker?.()}
+            />
+          );
+          return (
+            <div key={character.id} className="flex shrink-0 items-center gap-1.5">
+              {actionSide === "left" && (
+                <AnimatePresence>{isSelected && actions}</AnimatePresence>
+              )}
+              {avatar}
+              {actionSide === "right" && (
+                <AnimatePresence>{isSelected && actions}</AnimatePresence>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -255,7 +281,7 @@ function ParticipantAvatar({
     >
       <div
         className={cn(
-          "h-full w-full rounded-full overflow-hidden bg-linear-to-br from-fg/8 to-fg/4",
+          "h-full w-full rounded-full overflow-hidden bg-transparent",
           "ring-2 transition-all",
           selected
             ? "ring-accent ring-offset-2 ring-offset-surface shadow-[0_0_12px_-2px_var(--color-accent)]"
@@ -281,5 +307,48 @@ function ParticipantAvatar({
         </span>
       )}
     </motion.button>
+  );
+}
+
+function DirectorActions({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <motion.div
+      className="flex shrink-0 items-center gap-1"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26 }}
+    >
+      <button
+        type="button"
+        onClick={onConfirm}
+        aria-label="Confirm"
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-full",
+          "bg-accent text-black shadow-sm",
+          "transition-transform active:scale-90 hover:brightness-110",
+        )}
+      >
+        <Check size={16} strokeWidth={2.75} />
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        aria-label="Cancel"
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-full",
+          "bg-fg/15 text-fg/70",
+          "transition-transform active:scale-90 hover:bg-fg/25 hover:text-fg",
+        )}
+      >
+        <X size={16} strokeWidth={2.75} />
+      </button>
+    </motion.div>
   );
 }

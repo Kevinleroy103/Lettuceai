@@ -995,28 +995,38 @@ export function GroupChatPage() {
   const handleDirectorTap = useCallback(
     (characterId: string) => {
       if (sending) return;
-      if (draft.trim()) {
-        setDirectorSelectedId((prev) => (prev === characterId ? null : characterId));
-        return;
-      }
-      setDirectorSelectedId(null);
-      void handleContinue(characterId);
+      setDirectorSelectedId((prev) => (prev === characterId ? null : characterId));
     },
-    [sending, draft, handleContinue],
+    [sending],
   );
+
+  const handleDirectorConfirm = useCallback(
+    async (characterId: string) => {
+      if (sending) return;
+      setDirectorSelectedId(null);
+      const text = draft.trim();
+      if (text) {
+        setDraft("");
+        const added = await handleAddUserMessage(text);
+        if (!added) return;
+      }
+      await handleContinue(characterId);
+    },
+    [sending, draft, handleAddUserMessage, handleContinue],
+  );
+
+  const handleDirectorCancel = useCallback(() => {
+    setDirectorSelectedId(null);
+  }, []);
 
   const handleDirectorSend = useCallback(async () => {
     if (sending) return;
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    const selected = directorSelectedId;
     setDirectorSelectedId(null);
-    const added = await handleAddUserMessage(text);
-    if (added && selected) {
-      await handleContinue(selected);
-    }
-  }, [sending, draft, directorSelectedId, handleAddUserMessage, handleContinue]);
+    await handleAddUserMessage(text);
+  }, [sending, draft, handleAddUserMessage]);
 
   useEffect(() => {
     if (!isDirectorMode) setDirectorSelectedId(null);
@@ -2069,7 +2079,10 @@ export function GroupChatPage() {
         onAbort={handleAbort}
         directorMode={isDirectorMode}
         directorSelectedId={directorSelectedId}
+        directorActionSide={chatAppearance.participantsBarActionSide}
         onSelectSpeaker={handleDirectorTap}
+        onConfirmSpeaker={handleDirectorConfirm}
+        onCancelSpeaker={handleDirectorCancel}
         hasBackgroundImage={!!backgroundImageData}
         footerOverlayClassName={theme.footerOverlay}
         pendingAttachments={pendingAttachments}

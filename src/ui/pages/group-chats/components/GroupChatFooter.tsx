@@ -62,7 +62,10 @@ interface GroupChatFooterProps {
   participantsBarAlign?: ParticipantsBarAlign;
   directorMode?: boolean;
   directorSelectedId?: string | null;
+  directorActionSide?: "left" | "right";
   onSelectSpeaker?: (characterId: string) => void;
+  onConfirmSpeaker?: (characterId: string) => void;
+  onCancelSpeaker?: () => void;
 }
 
 export function GroupChatFooter({
@@ -100,7 +103,10 @@ export function GroupChatFooter({
   participantsBarAlign = "left",
   directorMode = false,
   directorSelectedId = null,
+  directorActionSide = "right",
   onSelectSpeaker,
+  onConfirmSpeaker,
+  onCancelSpeaker,
 }: GroupChatFooterProps) {
   const { t } = useI18n();
   const hasDraft = draft.trim().length > 0;
@@ -422,7 +428,10 @@ export function GroupChatFooter({
           align={participantsBarAlign}
           directorMode={directorMode}
           selectedId={directorSelectedId}
+          actionSide={directorActionSide}
           onSelectSpeaker={onSelectSpeaker}
+          onConfirmSpeaker={onConfirmSpeaker}
+          onCancelSpeaker={onCancelSpeaker}
         />
       )}
 
