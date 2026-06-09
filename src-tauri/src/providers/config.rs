@@ -132,6 +132,11 @@ fn get_all_provider_configs_internal() -> Vec<ProviderConfig> {
             "AUTOMATIC1111 (Local)",
             "http://127.0.0.1:7860",
         ),
+        (
+            "sdcpp",
+            "Stable Diffusion (Local)",
+            "http://127.0.0.1:17861",
+        ),
         ("ollama", "Ollama (Local)", ""),
         ("lmstudio", "LM Studio (Local)", ""),
         (

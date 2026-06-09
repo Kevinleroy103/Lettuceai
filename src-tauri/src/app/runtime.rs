@@ -41,10 +41,12 @@ pub(crate) fn handle_run_event(handler: &tauri::AppHandle, event: tauri::RunEven
         tauri::RunEvent::ExitRequested { .. } => {
             abort_pending_work(handler);
             flush_usage_state(handler);
+            crate::sdcpp::shutdown(handler);
         }
         tauri::RunEvent::Exit => {
             abort_pending_work(handler);
             flush_usage_state(handler);
+            crate::sdcpp::shutdown(handler);
             android_monitor::mark_clean_exit(handler);
             let analytics_enabled = handler.state::<AnalyticsState>().enabled;
             if analytics_enabled {
