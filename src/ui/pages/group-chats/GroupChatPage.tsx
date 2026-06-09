@@ -2029,6 +2029,13 @@ export function GroupChatPage() {
   const scrollButtonBottomOffset = `calc(env(safe-area-inset-bottom) + ${keyboardInset}px + 88px)`;
 
   const columnLayout = getChatColumnLayout(chatAppearance);
+  const participantsBarVisible =
+    groupCharacters.length >= 2 && (chatAppearance.participantsBarEnabled || isDirectorMode);
+  const messagesPadBottom = participantsBarVisible
+    ? isDirectorMode
+      ? "pb-28"
+      : "pb-20"
+    : "pb-6";
   const headerInside = widgetsOn && chatAppearance.chatHeaderMoves;
   const footerInside = widgetsOn && chatAppearance.chatFooterMoves;
   const applyHeaderColumnClass = !widgetsOn && chatAppearance.chatHeaderMoves;
@@ -2152,7 +2159,7 @@ export function GroupChatPage() {
           className="relative w-full flex-1 overflow-y-auto px-2 pb-2"
         >
           <div
-            className={`${getChatColumnLayout(chatAppearance).className} ${chatAppearance.messageGap === "tight" ? "space-y-2" : chatAppearance.messageGap === "relaxed" ? "space-y-6" : "space-y-4"} pb-6 pt-4`}
+            className={`${getChatColumnLayout(chatAppearance).className} ${chatAppearance.messageGap === "tight" ? "space-y-2" : chatAppearance.messageGap === "relaxed" ? "space-y-6" : "space-y-4"} ${messagesPadBottom} pt-4`}
             style={{
               ...getChatColumnLayout(chatAppearance).style,
               backgroundColor: backgroundImageData

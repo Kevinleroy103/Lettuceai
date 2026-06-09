@@ -416,8 +416,17 @@ export function GroupChatFooter({
       />
 
       {!micActive && onToggleMute && (participantsBarEnabled || directorMode) && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-full px-4">
-          <div className="pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-0 bottom-full">
+          <div
+            aria-hidden
+            className={cn(
+              "absolute inset-0",
+              hasBackgroundImage
+                ? "bg-gradient-to-t from-black/45 via-black/20 to-transparent"
+                : "bg-gradient-to-t from-surface via-surface/70 to-transparent",
+            )}
+          />
+          <div className="pointer-events-auto relative px-4">
             <GroupChatParticipantsBar
               characters={characters}
               draft={draft}

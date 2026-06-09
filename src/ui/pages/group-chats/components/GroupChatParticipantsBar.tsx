@@ -131,24 +131,6 @@ export function GroupChatParticipantsBar({
 
   return (
     <div className="mb-1">
-      {directorMode && (
-        <div className="mb-1.5 flex items-center gap-1.5 px-1.5 text-[11px] text-fg/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-          <Clapperboard size={12} className="text-accent/80" />
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={selectedName ?? "none"}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.16 }}
-            >
-              {selectedName
-                ? t("groupChats.footer.directorSelectedHint", { name: selectedName })
-                : t("groupChats.footer.directorHint")}
-            </motion.span>
-          </AnimatePresence>
-        </div>
-      )}
       <div className="flex items-center gap-2">
         {actionSide === "left" && (
           <AnimatePresence>{!!selectedId && actions}</AnimatePresence>
@@ -192,6 +174,24 @@ export function GroupChatParticipantsBar({
           <AnimatePresence>{!!selectedId && actions}</AnimatePresence>
         )}
       </div>
+      {directorMode && (
+        <div className="mt-1 flex items-center gap-1.5 px-1.5 text-[11px] text-fg/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+          <Clapperboard size={12} className="text-accent/80" />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={selectedName ?? "none"}
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -3 }}
+              transition={{ duration: 0.16 }}
+            >
+              {selectedName
+                ? t("groupChats.footer.directorSelectedHint", { name: selectedName })
+                : t("groupChats.footer.directorHint")}
+            </motion.span>
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }
