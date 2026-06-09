@@ -192,6 +192,7 @@ export function GroupChatPage() {
     updateGroup,
     reloadSession,
     setDraftAppearanceOverride,
+    appearanceFieldUpdater,
     registerAppearanceFieldUpdater,
   } = useGroupChatLayoutContext();
   const helpMeReplyEnabled = settings?.advancedSettings?.helpMeReplyEnabled ?? true;
@@ -2139,9 +2140,15 @@ export function GroupChatPage() {
               widgetLayout={widgetLayout}
               leftNodes={widgetLeftNodes}
               rightNodes={widgetRightNodes}
-              resizable={false}
+              resizable={chatAppearance.chatColumnWidth === "custom" && appearanceDrawerOpen}
               viewportWidth={viewportWidth}
-              onResizeColumn={(px) => void persistColumnWidthPx(px)}
+              onResizeColumn={(px) => {
+                if (appearanceFieldUpdater) {
+                  appearanceFieldUpdater("chatColumnWidthPx", px);
+                } else {
+                  void persistColumnWidthPx(px);
+                }
+              }}
             >
         {headerInside && headerNode}
         <main
