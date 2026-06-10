@@ -25,6 +25,7 @@ import {
   HardDrive,
   ChevronDown,
   SlidersHorizontal,
+  Image as ImageIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -64,6 +65,17 @@ interface HfModelFile {
   size: number;
   quantization: string;
   isMmproj: boolean;
+  role?: string | null;
+}
+
+interface SdRunabilityScore {
+  filename: string;
+  score: number;
+  label: "excellent" | "good" | "marginal" | "poor" | "unrunnable";
+  familyGuess: string;
+  fitsInVram: boolean;
+  fitsInRam: boolean;
+  maxComfortableResolution: number;
 }
 
 interface RunabilityScore {
@@ -637,6 +649,9 @@ type QueueDownloadMetadata = {
   llamaGpuLayers?: number | null;
   llamaModelOffloadMode?: ModelOffload | null;
   downloadRole?: TrackedDownloadRole | null;
+  queueKind?: string | null;
+  destinationPath?: string | null;
+  variant?: string | null;
 };
 
 type ViewState = { kind: "search" } | { kind: "model"; modelId: string };
@@ -1228,13 +1243,27 @@ export function HuggingFaceBrowserPage() {
     return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, handler);
   }, []);
 
+  const sdModeParam = searchParams.get("mode");
+  const isSdMode = sdModeParam === "sd";
+
   // Helper to preserve returnTo across param changes
   const preserveParams = useCallback(
     (next: Record<string, string>) => {
       if (returnTo) next.returnTo = returnTo;
+      if (sdModeParam) next.mode = sdModeParam;
       return next;
     },
-    [returnTo],
+    [returnTo, sdModeParam],
+  );
+
+  const setSdMode = useCallback(
+    (enabled: boolean) => {
+      const next: Record<string, string> = {};
+      if (returnTo) next.returnTo = returnTo;
+      if (enabled) next.mode = "sd";
+      setSearchParams(next, { replace: true });
+    },
+    [returnTo, setSearchParams],
   );
 
   useEffect(() => {
@@ -1363,6 +1392,16 @@ export function HuggingFaceBrowserPage() {
   const [readme, setReadme] = useState<string | null>(null);
   const [readmeLoading, setReadmeLoading] = useState(false);
   const [runabilityScores, setRunabilityScores] = useState<Record<string, RunabilityScore>>({});
+  const [sdScores, setSdScores] = useState<Record<string, SdRunabilityScore>>({});
+  const [sdModelsDir, setSdModelsDir] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSdMode || sdModelsDir) return;
+    import("../../../core/local-diffusion")
+      .then(({ sdGetStatus }) => sdGetStatus())
+      .then((status) => setSdModelsDir(status.modelsDir))
+      .catch(() => {});
+  }, [isSdMode, sdModelsDir]);
 
   // Recommendation panel state
   const [recData, setRecData] = useState<RecommendationData | null>(null);
@@ -1474,6 +1513,7 @@ export function HuggingFaceBrowserPage() {
         limit: isDirectLookup ? 5 : PAGE_SIZE,
         sort: sortField(sortMode),
         offset: 0,
+        mode: isSdMode ? "sd" : null,
       });
       if (isDirectLookup) {
         const exact = data.filter((d) => d.modelId.toLowerCase() === debouncedQuery.toLowerCase());
@@ -1491,7 +1531,7 @@ export function HuggingFaceBrowserPage() {
       setSearching(false);
       setHasSearched(true);
     }
-  }, [debouncedQuery, sortMode, sortField, isDirectLookup]);
+  }, [debouncedQuery, sortMode, sortField, isDirectLookup, isSdMode]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -1502,6 +1542,7 @@ export function HuggingFaceBrowserPage() {
         limit: PAGE_SIZE,
         sort: sortField(sortMode),
         offset: results.length,
+        mode: isSdMode ? "sd" : null,
       });
       if (data.length < PAGE_SIZE) setHasMore(false);
       if (data.length > 0) {
@@ -1511,7 +1552,7 @@ export function HuggingFaceBrowserPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, debouncedQuery, sortMode, sortField, results.length]);
+  }, [loadingMore, hasMore, debouncedQuery, sortMode, sortField, results.length, isSdMode]);
 
   useEffect(() => {
     if (view.kind === "search") {
@@ -1547,20 +1588,50 @@ export function HuggingFaceBrowserPage() {
       setReadme(null);
       setReadmeLoading(true);
       setRunabilityScores({});
+      setSdScores({});
       setRecData(null);
-      setRecLoading(!isOllamaMode);
-      setFilesPanelTab(isOllamaMode ? "files" : "recommended");
+      setRecLoading(!isOllamaMode && !isSdMode);
+      setFilesPanelTab(isOllamaMode || isSdMode ? "files" : "recommended");
       setCompareOpen(false);
       setCompareSelections([]);
       setRecImageSupport(false);
       setRecMmprojFile("");
 
-      const filesPromise = invoke<HfModelInfo>("hf_get_model_files", { modelId })
+      const filesPromise = invoke<HfModelInfo>("hf_get_model_files", {
+        modelId,
+        mode: isSdMode ? "sd" : null,
+      })
         .then((info) => {
           setModelInfo(info);
           // Fetch runability scores in background (skipped in Ollama mode — host hardware unknown)
           const runnableFiles = info.files.filter((f) => f.size > 0 && !f.isMmproj);
-          if (runnableFiles.length > 0 && !isOllamaMode) {
+          if (runnableFiles.length > 0 && isSdMode) {
+            invoke<SdRunabilityScore[]>("hf_compute_sd_runability", {
+              files: runnableFiles.map((f) => ({
+                filename: f.filename,
+                size: f.size,
+                quantization: f.quantization,
+              })),
+            })
+              .then((scores) => {
+                const sdMap: Record<string, SdRunabilityScore> = {};
+                const map: Record<string, RunabilityScore> = {};
+                for (const s of scores) {
+                  sdMap[s.filename] = s;
+                  map[s.filename] = {
+                    filename: s.filename,
+                    score: s.score,
+                    label: s.label,
+                    fitsInRam: s.fitsInRam,
+                    fitsInVram: s.fitsInVram,
+                    gpuMode: s.fitsInVram ? "full" : s.fitsInRam ? "cpu" : "cpu",
+                  };
+                }
+                setSdScores(sdMap);
+                setRunabilityScores(map);
+              })
+              .catch(() => {});
+          } else if (runnableFiles.length > 0 && !isOllamaMode) {
             invoke<RunabilityScore[]>("hf_compute_runability", {
               modelId: info.modelId,
               files: runnableFiles.map((f) => ({
@@ -1597,12 +1668,12 @@ export function HuggingFaceBrowserPage() {
 
       await Promise.allSettled([filesPromise, readmePromise]);
     },
-    [setView, isOllamaMode],
+    [setView, isOllamaMode, isSdMode],
   );
 
   useEffect(() => {
     if (view.kind !== "model" || !modelInfo) return;
-    if (isOllamaMode) {
+    if (isOllamaMode || isSdMode) {
       setRecLoading(false);
       setRecData(null);
       return;
@@ -1646,7 +1717,7 @@ export function HuggingFaceBrowserPage() {
     return () => {
       cancelled = true;
     };
-  }, [view.kind, modelInfo, isOllamaMode]);
+  }, [view.kind, modelInfo, isOllamaMode, isSdMode]);
 
   const filesWithSize = modelInfo?.files.filter((f) => f.size > 0) ?? [];
   const runnableFilesWithSize = useMemo(
@@ -1998,6 +2069,24 @@ export function HuggingFaceBrowserPage() {
   const queueFilesDownload = useCallback(
     async (file: HfModelFile) => {
       if (!modelInfo) return;
+
+      if (isSdMode) {
+        const family = sdScores[file.filename]?.familyGuess ?? "sd15";
+        const role = file.role ?? "checkpoint";
+        const repoSlug = modelInfo.modelId.replace(/[^A-Za-z0-9._-]+/g, "_");
+        const destinationPath = sdModelsDir
+          ? `${sdModelsDir}/${repoSlug}/${file.filename}`
+          : null;
+        await queueTrackedDownload(modelInfo.modelId, file.filename, {
+          queueKind: "sd",
+          destinationPath,
+          variant: `${family}:${role}`,
+          displayName: extractModelShortName(modelInfo.modelId),
+          installId: crypto.randomUUID(),
+        });
+        return;
+      }
+
       const fileRecommendation = recData?.files.find((item) => item.filename === file.filename) ?? null;
       const requestedModelOffload = gpuOptionsEnabled ? recModelOffload : "auto";
       const requestedGpuLayers = fileRecommendation
@@ -2032,6 +2121,7 @@ export function HuggingFaceBrowserPage() {
     [
       gpuOptionsEnabled,
       isOllamaMode,
+      isSdMode,
       modelInfo,
       queueTrackedDownload,
       recContext,
@@ -2042,6 +2132,8 @@ export function HuggingFaceBrowserPage() {
       recModelOffload,
       recommendedMixedGpuLayers,
       returnTo,
+      sdModelsDir,
+      sdScores,
       selectedOllamaProviderId,
     ],
   );
@@ -2177,6 +2269,31 @@ export function HuggingFaceBrowserPage() {
                   </button>
 
                   {/* Destination picker (single-line, search-bar height) */}
+                  <div className="flex h-10 shrink-0 items-center gap-1 rounded-xl border border-fg/10 bg-fg/4 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSdMode(false)}
+                      className={cn(
+                        "flex h-full items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium transition-colors",
+                        !isSdMode ? "bg-accent/15 text-accent" : "text-fg/55 hover:text-fg/85",
+                      )}
+                    >
+                      <Cpu size={12} />
+                      {t("hfBrowser.modeLlm")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSdMode(true)}
+                      className={cn(
+                        "flex h-full items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium transition-colors",
+                        isSdMode ? "bg-accent/15 text-accent" : "text-fg/55 hover:text-fg/85",
+                      )}
+                    >
+                      <ImageIcon size={12} />
+                      {t("hfBrowser.modeImage")}
+                    </button>
+                  </div>
+                  {!isSdMode ? (
                   <button
                     onClick={() => setShowOllamaProviderMenu(true)}
                     className={cn(
@@ -2204,6 +2321,7 @@ export function HuggingFaceBrowserPage() {
                       className="shrink-0 opacity-50 transition group-hover:opacity-90"
                     />
                   </button>
+                  ) : null}
                 </div>
 
                 {/* Sort segmented bar with sliding indicator */}
@@ -2699,6 +2817,10 @@ export function HuggingFaceBrowserPage() {
                                 {t("hfBrowser.files")} ({filesWithSize.length})
                               </div>
                             </>
+                          ) : isSdMode ? (
+                            <div className="rounded-lg border border-fg/10 bg-fg/5 px-3 py-2 text-center text-[12px] font-medium text-fg/60">
+                              {t("hfBrowser.files")} ({filesWithSize.length})
+                            </div>
                           ) : (
                             <div className="grid grid-cols-2 gap-1 rounded-lg border border-fg/10 bg-fg/5 p-1">
                               <button
@@ -3370,6 +3492,19 @@ export function HuggingFaceBrowserPage() {
                                     {file.isMmproj && (
                                       <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-blue-300">
                                         MMPROJ
+                                      </span>
+                                    )}
+                                    {isSdMode && file.role && (
+                                      <span className="rounded-md border border-violet-400/20 bg-violet-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-violet-300">
+                                        {file.role}
+                                      </span>
+                                    )}
+                                    {isSdMode && sdScores[file.filename] && (
+                                      <span className="rounded-md border border-fg/15 bg-fg/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-fg/55">
+                                        {sdScores[file.filename].familyGuess}
+                                        {sdScores[file.filename].maxComfortableResolution > 0
+                                          ? ` · ${sdScores[file.filename].maxComfortableResolution}px`
+                                          : ""}
                                       </span>
                                     )}
                                     {rs && (

@@ -114,6 +114,22 @@ export async function sdCancelGeneration(): Promise<boolean> {
   return invoke<boolean>("sd_cancel_generation");
 }
 
+export async function sdRegisterHfModel(
+  repo: string,
+  filePath: string,
+  role: SdModelRole,
+  family: SdFamily,
+  displayName?: string | null,
+): Promise<SdModelEntry> {
+  return invoke<SdModelEntry>("sd_register_hf_model", {
+    repo,
+    filePath,
+    role,
+    family,
+    displayName: displayName ?? null,
+  });
+}
+
 export function sdFamilyFromModelId(modelId: string): SdFamily | null {
   for (const family of ["sd15", "sdxl", "sd3", "flux"] as const) {
     if (modelId.startsWith(`${family}-`)) {
@@ -121,4 +137,33 @@ export function sdFamilyFromModelId(modelId: string): SdFamily | null {
     }
   }
   return null;
+}
+
+export async function sdEnsureModelRow(entry: SdModelEntry): Promise<void> {
+  if (!entry.complete) return;
+  const { addOrUpdateModel, readSettings } = await import("../storage/repo");
+  const settings = await readSettings();
+  const existing = settings.models.find(
+    (model) => model.providerId === LOCAL_DIFFUSION_PROVIDER_ID && model.name === entry.id,
+  );
+  await addOrUpdateModel({
+    id: existing?.id,
+    name: entry.id,
+    providerId: LOCAL_DIFFUSION_PROVIDER_ID,
+    providerLabel: LOCAL_DIFFUSION_PROVIDER_LABEL,
+    displayName: entry.name,
+    inputScopes: ["text", "image"],
+    outputScopes: ["image"],
+  });
+}
+
+export async function sdRemoveModelRow(entryId: string): Promise<void> {
+  const { readSettings, removeModel } = await import("../storage/repo");
+  const settings = await readSettings();
+  const existing = settings.models.find(
+    (model) => model.providerId === LOCAL_DIFFUSION_PROVIDER_ID && model.name === entryId,
+  );
+  if (existing) {
+    await removeModel(existing.id);
+  }
 }

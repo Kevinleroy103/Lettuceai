@@ -4,9 +4,8 @@ import { Cpu, Download, FilePlus2, HardDrive, Search, Trash2 } from "lucide-reac
 import { open } from "@tauri-apps/plugin-dialog";
 
 import {
-  LOCAL_DIFFUSION_PROVIDER_ID,
-  LOCAL_DIFFUSION_PROVIDER_LABEL,
   sdDeleteModel,
+  sdEnsureModelRow,
   sdFinalizeBinaryInstall,
   sdGetStatus,
   sdImportModel,
@@ -14,6 +13,7 @@ import {
   sdListModels,
   sdQueueBinaryInstall,
   sdRemoveBinary,
+  sdRemoveModelRow,
   sdUpdateModelFiles,
   type SdEngineVariant,
   type SdFamily,
@@ -21,7 +21,6 @@ import {
   type SdModelFiles,
   type SdStatus,
 } from "../../../core/local-diffusion";
-import { addOrUpdateModel, readSettings, removeModel } from "../../../core/storage/repo";
 import { useDownloadQueue } from "../../../core/downloads/DownloadQueueContext";
 import { useI18n } from "../../../core/i18n/context";
 import { Routes } from "../../navigation";
@@ -74,33 +73,6 @@ async function pickModelFile(): Promise<string | null> {
     filters: [{ name: "Model files", extensions: ["safetensors", "gguf", "ckpt"] }],
   });
   return typeof selection === "string" ? selection : null;
-}
-
-async function ensureModelRow(entry: SdModelEntry): Promise<void> {
-  if (!entry.complete) return;
-  const settings = await readSettings();
-  const existing = settings.models.find(
-    (model) => model.providerId === LOCAL_DIFFUSION_PROVIDER_ID && model.name === entry.id,
-  );
-  await addOrUpdateModel({
-    id: existing?.id,
-    name: entry.id,
-    providerId: LOCAL_DIFFUSION_PROVIDER_ID,
-    providerLabel: LOCAL_DIFFUSION_PROVIDER_LABEL,
-    displayName: entry.name,
-    inputScopes: ["text", "image"],
-    outputScopes: ["image"],
-  });
-}
-
-async function removeModelRow(entryId: string): Promise<void> {
-  const settings = await readSettings();
-  const existing = settings.models.find(
-    (model) => model.providerId === LOCAL_DIFFUSION_PROVIDER_ID && model.name === entryId,
-  );
-  if (existing) {
-    await removeModel(existing.id);
-  }
 }
 
 export function LocalImageGenSection() {
@@ -219,7 +191,7 @@ export function LocalImageGenSection() {
     if (!key) return;
     try {
       const updated = await sdUpdateModelFiles(entry.id, { [key]: path });
-      await ensureModelRow(updated);
+      await sdEnsureModelRow(updated);
       void refresh();
     } catch (err) {
       toast.error(
@@ -232,7 +204,7 @@ export function LocalImageGenSection() {
   const deleteEntry = async (entry: SdModelEntry) => {
     try {
       await sdDeleteModel(entry.id, true);
-      await removeModelRow(entry.id);
+      await sdRemoveModelRow(entry.id);
       void refresh();
     } catch (err) {
       toast.error(
@@ -255,7 +227,7 @@ export function LocalImageGenSection() {
   const submitImport = async () => {
     try {
       const entry = await sdImportModel(importName, importFamily, importFiles);
-      await ensureModelRow(entry);
+      await sdEnsureModelRow(entry);
       setShowImport(false);
       setImportName("");
       setImportFiles({});

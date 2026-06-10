@@ -80,8 +80,48 @@ function isCreateableModelDownload(item: QueuedDownload): boolean {
   return (
     item.queueKind !== "kokoro" &&
     item.queueKind !== "whisper" &&
+    item.queueKind !== "sd" &&
+    item.queueKind !== "sdcpp" &&
     !isMmprojFilename(item.filename)
   );
+}
+
+const registeredSdDownloads = new Set<string>();
+
+async function registerCompletedSdDownload(item: QueuedDownload): Promise<void> {
+  if (item.queueKind !== "sd" || !item.resultPath || registeredSdDownloads.has(item.id)) {
+    return;
+  }
+  registeredSdDownloads.add(item.id);
+  const [family, role] = (item.variant ?? "").split(":");
+  if (!family || !role) return;
+  try {
+    const { sdEnsureModelRow, sdRegisterHfModel } = await import("../local-diffusion");
+    type SdRegisterArgs = Parameters<typeof sdRegisterHfModel>;
+    const entry = await sdRegisterHfModel(
+      item.modelId,
+      item.resultPath,
+      role as SdRegisterArgs[2],
+      family as SdRegisterArgs[3],
+      item.displayName,
+    );
+    if (entry.complete) {
+      await sdEnsureModelRow(entry);
+      toast.success("Image model ready", `${entry.name} is available for image generation.`);
+    } else {
+      toast.success(
+        "Model file registered",
+        `${entry.name} still needs: ${entry.missingRoles.join(", ")}. Download or attach the remaining files to finish setup.`,
+        { duration: 10000 },
+      );
+    }
+  } catch (err: any) {
+    registeredSdDownloads.delete(item.id);
+    toast.error(
+      "Model registration failed",
+      typeof err === "string" ? err : err?.message || "Unknown error",
+    );
+  }
 }
 
 export function DownloadQueueProvider({ children }: { children: ReactNode }) {
@@ -131,7 +171,8 @@ export function DownloadQueueProvider({ children }: { children: ReactNode }) {
 
       // Download just completed
       if (prevItem.status !== "complete" && item.status === "complete") {
-        if (!isOnHfPage) {
+        void registerCompletedSdDownload(item);
+        if (!isOnHfPage && item.queueKind !== "sd" && item.queueKind !== "sdcpp") {
           const displayName =
             item.queueKind === "kokoro"
               ? item.displayName || item.filename

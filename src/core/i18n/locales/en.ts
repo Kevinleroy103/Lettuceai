@@ -2855,6 +2855,8 @@ export const enMessages = {
     sortDownloads: "Most Downloaded",
     sortLikes: "Most Liked",
     sortRecent: "Recently Updated",
+    modeLlm: "LLM",
+    modeImage: "Image",
     browseOnHuggingFace: "Browse on HuggingFace",
     selectFromLibrary: "Select from Library",
     libraryEmpty: "No downloaded models yet",
