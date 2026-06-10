@@ -25,6 +25,7 @@ import {
   readSettingsCached,
   SETTINGS_UPDATED_EVENT,
 } from "../../../core/storage/repo";
+import { sdDeleteImageFile, sdListImageFiles } from "../../../core/local-diffusion";
 import type { ProviderCredential } from "../../../core/storage/schemas";
 
 type InstalledGgufModel = {
@@ -36,6 +37,7 @@ type InstalledGgufModel = {
   isMmproj: boolean;
   architecture?: string | null;
   contextLength?: number | null;
+  imageRole?: string | null;
 };
 
 type OllamaInstalledModel = {
@@ -49,6 +51,19 @@ type OllamaInstalledModel = {
 };
 
 type Tab = "local" | "ollama";
+type ContentMode = "all" | "llm" | "image";
+
+const IMAGE_ROLE_LABELS: Record<string, string> = {
+  checkpoint: "CHECKPOINT",
+  diffusionModel: "DIFFUSION",
+  clipL: "CLIP-L",
+  clipG: "CLIP-G",
+  t5xxl: "T5-XXL",
+  llm: "TEXT-ENC",
+  llmVision: "VISION-ENC",
+  vae: "VAE",
+  lora: "LORA",
+};
 
 type SortField = "params" | "arch" | "context" | "size";
 type SortDirection = "desc" | "asc";
@@ -114,11 +129,13 @@ function relativeTime(iso: string | null): string {
 export function InstalledModelsPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("local");
+  const [contentMode, setContentMode] = useState<ContentMode>("all");
 
   // ---- Local state ----
   const [query, setQuery] = useState("");
   const [modelsDir, setModelsDir] = useState("");
   const [models, setModels] = useState<InstalledGgufModel[]>([]);
+  const [imageModels, setImageModels] = useState<InstalledGgufModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
@@ -147,9 +164,10 @@ export function InstalledModelsPage() {
     if (mode === "initial") setLoading(true);
     else setRefreshing(true);
     try {
-      const [dir, downloaded] = await Promise.all([
+      const [dir, downloaded, imageFiles] = await Promise.all([
         invoke<string>("hf_get_gguf_models_dir"),
         invoke<InstalledGgufModel[]>("hf_list_downloaded_models"),
+        sdListImageFiles().catch(() => []),
       ]);
       setModelsDir(dir);
       setModels(
@@ -158,6 +176,24 @@ export function InstalledModelsPage() {
             ? l.modelId.localeCompare(r.modelId)
             : l.filename.localeCompare(r.filename),
         ),
+      );
+      setImageModels(
+        imageFiles.map((file) => {
+          const segments = file.path.split(/[\/]/);
+          const parent = segments.length > 1 ? segments[segments.length - 2] : "";
+          const extension = file.filename.split(".").pop()?.toUpperCase() ?? "";
+          return {
+            modelId: parent,
+            filename: file.filename,
+            path: file.path,
+            size: file.size,
+            quantization: extension,
+            isMmproj: false,
+            architecture: null,
+            contextLength: null,
+            imageRole: file.role,
+          };
+        }),
       );
       setError(null);
     } catch (err) {
@@ -232,19 +268,26 @@ export function InstalledModelsPage() {
   }, [loadOllama]);
 
   // ---- Local: derived ----
+  const visibleModels = useMemo(() => {
+    if (contentMode === "llm") return models;
+    if (contentMode === "image") return imageModels;
+    return [...models, ...imageModels];
+  }, [contentMode, models, imageModels]);
+
   const filteredModels = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return models;
-    return models.filter((m) => {
+    if (!needle) return visibleModels;
+    return visibleModels.filter((m) => {
       return (
         m.modelId.toLowerCase().includes(needle) ||
         m.filename.toLowerCase().includes(needle) ||
         m.path.toLowerCase().includes(needle) ||
         (m.architecture ?? "").toLowerCase().includes(needle) ||
+        (m.imageRole ?? "").toLowerCase().includes(needle) ||
         m.quantization.toLowerCase().includes(needle)
       );
     });
-  }, [models, query]);
+  }, [visibleModels, query]);
 
   const sortedModels = useMemo(() => {
     if (!sortField || !sortDirection) return filteredModels;
@@ -329,7 +372,11 @@ export function InstalledModelsPage() {
       if (!confirmed) return;
       try {
         setDeletingPath(model.path);
-        await invoke("hf_delete_downloaded_model", { filePath: model.path });
+        if (model.imageRole) {
+          await sdDeleteImageFile(model.path);
+        } else {
+          await invoke("hf_delete_downloaded_model", { filePath: model.path });
+        }
         toast.success(t("installedModels.toasts.modelDeleted"), model.filename);
         await loadModels("refresh");
       } catch (err) {
@@ -433,8 +480,8 @@ export function InstalledModelsPage() {
     {
       key: "local",
       label: t("installedModels.tabs.local"),
-      count: models.length,
-      size: models.reduce((s, m) => s + m.size, 0),
+      count: models.length + imageModels.length,
+      size: [...models, ...imageModels].reduce((s, m) => s + m.size, 0),
     },
     {
       key: "ollama",
@@ -445,7 +492,10 @@ export function InstalledModelsPage() {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-5 pb-10 pt-5 sm:px-8">
+    <div
+      className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 overflow-hidden px-5 pt-5 sm:px-8"
+      style={{ height: "calc(100dvh - var(--topnav-h, 72px))" }}
+    >
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -500,6 +550,8 @@ export function InstalledModelsPage() {
           modelsDir={modelsDir}
           query={query}
           setQuery={setQuery}
+          contentMode={contentMode}
+          setContentMode={setContentMode}
           loading={loading}
           refreshing={refreshing}
           error={error}
@@ -601,6 +653,8 @@ interface LocalViewProps {
   modelsDir: string;
   query: string;
   setQuery: (v: string) => void;
+  contentMode: ContentMode;
+  setContentMode: (mode: ContentMode) => void;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -618,6 +672,8 @@ function LocalView({
   modelsDir,
   query,
   setQuery,
+  contentMode,
+  setContentMode,
   loading,
   refreshing,
   error,
@@ -631,15 +687,44 @@ function LocalView({
   t,
 }: LocalViewProps) {
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col gap-6">
       {/* Toolbar */}
       <Toolbar
         leading={
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={t("installedModels.searchPlaceholder")}
-          />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder={t("installedModels.searchPlaceholder")}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-1 rounded-full border border-fg/8 bg-fg/[0.025] p-0.5">
+              {(
+                [
+                  ["all", t("installedModels.modes.all")],
+                  ["llm", t("installedModels.modes.llm")],
+                  ["image", t("installedModels.modes.image")],
+                ] as Array<[ContentMode, string]>
+              ).map(([mode, label]) => {
+                const active = contentMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setContentMode(mode)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
+                      active
+                        ? "bg-fg/[0.09] text-fg ring-1 ring-inset ring-fg/15"
+                        : "text-fg/55 hover:text-fg/85",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         }
         meta={[
           { value: String(sortedModels.length), unit: "files" },
@@ -668,7 +753,7 @@ function LocalView({
           description={t("installedModels.empty.description")}
         />
       ) : (
-        <div>
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="hidden grid-cols-[minmax(0,1.6fr)_70px_80px_90px_120px_100px_160px] items-center gap-3 border-b border-fg/10 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg/35 lg:grid">
             <div className="pl-0.5">{t("common.labels.name")}</div>
             <div>{t("installedModels.columns.type")}</div>
@@ -678,7 +763,7 @@ function LocalView({
             {renderSortHeader("size", t("installedModels.columns.size"))}
             <div className="pr-0.5 text-right">{t("installedModels.columns.action")}</div>
           </div>
-          <div>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-10">
             {sortedModels.map((model) => {
               const paramSize = extractParamSize(model.modelId, model.filename);
               const isMmproj = model.isMmproj;
@@ -696,7 +781,7 @@ function LocalView({
                         {model.modelId}
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 lg:hidden">
-                        <TypeBadge isMmproj={isMmproj} />
+                        <TypeBadge isMmproj={isMmproj} imageRole={model.imageRole} />
                         <Pill>{model.quantization}</Pill>
                         {paramSize && <Pill>{paramSize}</Pill>}
                         <Pill>{model.architecture?.toUpperCase() || "—"}</Pill>
@@ -706,7 +791,7 @@ function LocalView({
                     </div>
 
                     <div className="hidden lg:block">
-                      <TypeBadge isMmproj={isMmproj} />
+                      <TypeBadge isMmproj={isMmproj} imageRole={model.imageRole} />
                     </div>
                     <div className="hidden text-[12.5px] text-fg/70 lg:block">
                       {paramSize || "—"}
@@ -745,7 +830,7 @@ function LocalView({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -799,7 +884,7 @@ function OllamaView({
   }
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col gap-6">
       <Toolbar
         leading={
           <SearchInput
@@ -852,7 +937,7 @@ function OllamaView({
           description={t("installedModels.ollama.empty.description")}
         />
       ) : (
-        <div>
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="hidden grid-cols-[minmax(0,1.6fr)_92px_80px_90px_92px_104px_120px] items-center gap-3 border-b border-fg/10 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg/35 lg:grid">
             <div className="pl-0.5">{t("common.labels.name")}</div>
             <div>{t("installedModels.ollama.columns.family")}</div>
@@ -862,7 +947,7 @@ function OllamaView({
             <div>{t("installedModels.ollama.columns.modified")}</div>
             <div className="pr-0.5 text-right">{t("installedModels.ollama.columns.action")}</div>
           </div>
-          <div>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-10">
             {models.map((model) => (
               <div
                 key={model.name}
@@ -920,7 +1005,7 @@ function OllamaView({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -1034,17 +1119,19 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TypeBadge({ isMmproj }: { isMmproj: boolean }) {
+function TypeBadge({ isMmproj, imageRole }: { isMmproj: boolean; imageRole?: string | null }) {
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider",
-        isMmproj
-          ? "bg-blue-400/12 text-blue-300 ring-1 ring-inset ring-blue-400/20"
-          : "bg-emerald-400/12 text-emerald-300 ring-1 ring-inset ring-emerald-400/20",
+        imageRole
+          ? "bg-violet-400/12 text-violet-300 ring-1 ring-inset ring-violet-400/20"
+          : isMmproj
+            ? "bg-blue-400/12 text-blue-300 ring-1 ring-inset ring-blue-400/20"
+            : "bg-emerald-400/12 text-emerald-300 ring-1 ring-inset ring-emerald-400/20",
       )}
     >
-      {isMmproj ? "MMPROJ" : "LLM"}
+      {imageRole ? (IMAGE_ROLE_LABELS[imageRole] ?? imageRole.toUpperCase()) : isMmproj ? "MMPROJ" : "LLM"}
     </span>
   );
 }

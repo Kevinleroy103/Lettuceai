@@ -162,6 +162,56 @@ pub async fn sd_import_lora(app: AppHandle, path: String) -> Result<SdLocalFile,
     })
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdImageFile {
+    pub filename: String,
+    pub path: String,
+    pub size: u64,
+    pub role: String,
+}
+
+#[tauri::command]
+pub async fn sd_list_image_files(app: AppHandle) -> Result<Vec<SdImageFile>, String> {
+    let mut raw = Vec::new();
+    collect_model_files(&registry::models_dir(&app)?, &mut raw);
+    let mut files: Vec<SdImageFile> = raw
+        .into_iter()
+        .map(|file| SdImageFile {
+            role: crate::hf_browser::sd::guess_role(&file.filename, file.size).to_string(),
+            filename: file.filename,
+            path: file.path,
+            size: file.size,
+        })
+        .collect();
+    let mut lora_raw = Vec::new();
+    collect_model_files(&loras_dir(&app)?, &mut lora_raw);
+    files.extend(lora_raw.into_iter().map(|file| SdImageFile {
+        role: "lora".to_string(),
+        filename: file.filename,
+        path: file.path,
+        size: file.size,
+    }));
+    files.sort_by(|a, b| a.filename.to_lowercase().cmp(&b.filename.to_lowercase()));
+    Ok(files)
+}
+
+#[tauri::command]
+pub async fn sd_delete_image_file(app: AppHandle, path: String) -> Result<bool, String> {
+    let target = std::path::PathBuf::from(&path);
+    let models_root = registry::models_dir(&app)?;
+    let loras_root = loras_dir(&app)?;
+    if !(target.starts_with(&models_root) || target.starts_with(&loras_root)) {
+        return Err("File is outside the managed model folders".to_string());
+    }
+    if target.is_file() {
+        std::fs::remove_file(&target).map_err(|e| e.to_string())?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 #[tauri::command]
 pub async fn sd_delete_lora(app: AppHandle, filename: String) -> Result<bool, String> {
     if filename.contains('/') || filename.contains('\\') || filename.contains("..") {

@@ -2447,6 +2447,11 @@ export const enMessages = {
     },
   },
   installedModels: {
+    modes: {
+      all: "All",
+      llm: "LLM",
+      image: "Image",
+    },
     title: "Installed models",
     subtitle: "Browse and manage models on this device or on a remote Ollama instance.",
     tabs: {

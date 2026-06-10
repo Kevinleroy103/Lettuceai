@@ -362,6 +362,8 @@ macro_rules! invoke_handler {
             crate::local_diffusion::commands::sd_list_loras,
             crate::local_diffusion::commands::sd_import_lora,
             crate::local_diffusion::commands::sd_delete_lora,
+            crate::local_diffusion::commands::sd_list_image_files,
+            crate::local_diffusion::commands::sd_delete_image_file,
             crate::local_diffusion::commands::sd_delete_model,
             crate::local_diffusion::commands::sd_list_engine_variants,
             crate::local_diffusion::commands::sd_queue_binary_install,
