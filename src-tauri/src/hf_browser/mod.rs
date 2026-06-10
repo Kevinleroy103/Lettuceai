@@ -11,6 +11,8 @@ use tokio::sync::Mutex as TokioMutex;
 
 use crate::utils::{log_info, log_info_global, log_warn_global};
 
+pub mod sd;
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct HfModelEntry {
@@ -111,6 +113,8 @@ pub struct HfModelFile {
     pub size: u64,
     pub quantization: String,
     pub is_mmproj: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1746,14 +1750,20 @@ pub async fn hf_search_models(
     limit: Option<u32>,
     sort: Option<String>,
     offset: Option<u32>,
+    mode: Option<String>,
 ) -> Result<Vec<HfSearchResult>, String> {
     let limit = limit.unwrap_or(20).min(100);
     let sort_field = sort.unwrap_or_else(|| "trendingScore".to_string());
     let offset = offset.unwrap_or(0);
 
+    let filter = if mode.as_deref() == Some("sd") {
+        "pipeline_tag=text-to-image"
+    } else {
+        "filter=gguf"
+    };
     let mut url = format!(
-        "https://huggingface.co/api/models?filter=gguf&limit={}&sort={}&offset={}",
-        limit, sort_field, offset
+        "https://huggingface.co/api/models?{}&limit={}&sort={}&offset={}",
+        filter, limit, sort_field, offset
     );
     let trimmed = query.trim();
     if !trimmed.is_empty() {
@@ -1822,7 +1832,12 @@ pub async fn hf_search_models(
 }
 
 #[tauri::command]
-pub async fn hf_get_model_files(app: AppHandle, model_id: String) -> Result<HfModelInfo, String> {
+pub async fn hf_get_model_files(
+    app: AppHandle,
+    model_id: String,
+    mode: Option<String>,
+) -> Result<HfModelInfo, String> {
+    let sd_mode = mode.as_deref() == Some("sd");
     log_info(
         &app,
         "hf_browser",
@@ -1889,17 +1904,30 @@ pub async fn hf_get_model_files(app: AppHandle, model_id: String) -> Result<HfMo
         .iter()
         .filter(|s| {
             let lower = s.rfilename.to_lowercase();
-            lower.ends_with(".gguf") && !lower.contains("imatrix")
+            if lower.contains("imatrix") {
+                return false;
+            }
+            if sd_mode {
+                !lower.contains('/') && (lower.ends_with(".gguf") || lower.ends_with(".safetensors"))
+            } else {
+                lower.ends_with(".gguf")
+            }
         })
         .map(|s| {
             let lower = s.rfilename.to_lowercase();
             let size = size_map.get(&s.rfilename).copied().unwrap_or(0);
             let quantization = extract_quantization(&s.rfilename);
+            let role = if sd_mode {
+                Some(sd::guess_role(&s.rfilename, size).to_string())
+            } else {
+                None
+            };
             HfModelFile {
                 filename: s.rfilename.clone(),
                 size,
                 quantization,
                 is_mmproj: lower.contains("mmproj"),
+                role,
             }
         })
         .collect();

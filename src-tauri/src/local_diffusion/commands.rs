@@ -93,6 +93,60 @@ pub async fn sd_cancel_generation() -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn sd_register_hf_model(
+    app: AppHandle,
+    repo: String,
+    file_path: String,
+    role: String,
+    family: String,
+    display_name: Option<String>,
+) -> Result<SdModelEntryDto, String> {
+    let family = SdFamily::parse(&family).ok_or_else(|| format!("Unknown family: {family}"))?;
+    if !std::path::PathBuf::from(&file_path).is_file() {
+        return Err(format!("File not found: {file_path}"));
+    }
+
+    let mut files = SdModelFiles::default();
+    match role.as_str() {
+        "checkpoint" => files.checkpoint = Some(file_path),
+        "diffusionModel" => files.diffusion_model = Some(file_path),
+        "clipL" => files.clip_l = Some(file_path),
+        "clipG" => files.clip_g = Some(file_path),
+        "t5xxl" => files.t5xxl = Some(file_path),
+        "vae" => files.vae = Some(file_path),
+        other => return Err(format!("Unknown file role: {other}")),
+    }
+
+    if let Some(existing) = registry::find_by_repo(&app, &repo).await? {
+        if existing.family == family {
+            return Ok(registry::update_model_files(&app, &existing.id, files)
+                .await?
+                .into());
+        }
+    }
+
+    let name = display_name
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            repo.split('/')
+                .next_back()
+                .unwrap_or(repo.as_str())
+                .to_string()
+        });
+    let entry = SdModelEntry {
+        id: format!("{}-{}", family.prefix(), uuid::Uuid::new_v4()),
+        name,
+        family,
+        total_bytes: registry::total_bytes(&files),
+        files,
+        source: "hf".to_string(),
+        repo: Some(repo),
+        created_at: crate::infra::utils::now_millis()?,
+    };
+    Ok(registry::upsert_model(&app, entry).await?.into())
+}
+
+#[tauri::command]
 pub async fn sd_delete_model(
     app: AppHandle,
     model_id: String,
