@@ -314,6 +314,7 @@ export function EditModelPage() {
   const [sdEntries, setSdEntries] = useState<SdModelEntry[] | null>(null);
   const [showSdModelPicker, setShowSdModelPicker] = useState(false);
   const [sdFilesDraft, setSdFilesDraft] = useState<Record<string, string>>({});
+  const [sdMainPathDraft, setSdMainPathDraft] = useState("");
   const [sdLibraryFiles, setSdLibraryFiles] = useState<SdLocalFile[] | null>(null);
   const [sdLibraryRole, setSdLibraryRole] = useState<SdModelRole | null>(null);
   const [llamaContextInfo, setLlamaContextInfo] = useState<LlamaCppContextInfo | null>(null);
@@ -1174,6 +1175,7 @@ export function EditModelPage() {
       llmVision: files.llmVision ?? "",
       vae: files.vae ?? "",
     });
+    setSdMainPathDraft(files.checkpoint ?? files.diffusionModel ?? "");
   }, [selectedSdEntry]);
 
   useEffect(() => {
@@ -1219,6 +1221,56 @@ export function EditModelPage() {
     if (typeof selection !== "string") return;
     setSdFilesDraft((draft) => ({ ...draft, [role]: selection }));
     await commitSdFile(role, selection);
+  };
+
+  const commitSdMainModel = async (rawPath: string) => {
+    const path = rawPath.trim();
+    if (!path) return;
+    const role: SdModelRole = path.toLowerCase().endsWith(".gguf")
+      ? "diffusionModel"
+      : "checkpoint";
+    const sibling: SdModelRole = role === "checkpoint" ? "diffusionModel" : "checkpoint";
+    try {
+      if (selectedSdEntry) {
+        const currentMain =
+          selectedSdEntry.files.checkpoint ?? selectedSdEntry.files.diffusionModel ?? "";
+        if (path === currentMain) return;
+        await sdSetModelFile(selectedSdEntry.id, role, path);
+        const siblingValue = (selectedSdEntry.files as Record<string, string | null | undefined>)[
+          sibling
+        ];
+        if (siblingValue) {
+          await sdSetModelFile(selectedSdEntry.id, sibling, null);
+        }
+        setSdEntries(null);
+        return;
+      }
+      const fallbackName =
+        editorModel?.displayName?.trim() ||
+        path.split(/[\\/]/).pop()?.replace(/\.(safetensors|gguf|ckpt|sft)$/i, "") ||
+        "Local model";
+      const entry = await sdImportModel(fallbackName, { [role]: path });
+      handleModelNameChange(entry.id);
+      if (!editorModel?.displayName?.trim()) {
+        handleDisplayNameChange(entry.name);
+      }
+      setSdEntries(null);
+    } catch (err: any) {
+      toast.error(
+        t("imageGeneration.local.updateFailed"),
+        typeof err === "string" ? err : err?.message || String(err),
+      );
+    }
+  };
+
+  const browseSdMainModel = async () => {
+    const selection = await open({
+      multiple: false,
+      filters: [{ name: "Model files", extensions: ["safetensors", "gguf", "ckpt", "sft"] }],
+    });
+    if (typeof selection !== "string") return;
+    setSdMainPathDraft(selection);
+    await commitSdMainModel(selection);
   };
 
   // Get reasoning support for the current provider
@@ -1950,30 +2002,42 @@ export function EditModelPage() {
                         />
                       </FieldBlock>
 
-                      <FieldBlock label={t("editModel.fields.localDiffusionModel")}>
+                      <FieldBlock
+                        label={t("editModel.fields.localDiffusionModel")}
+                        action={
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowSdModelPicker(true)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-fg/10 bg-fg/5 px-2.5 py-1.5 text-[12px] font-medium text-fg/68 transition hover:border-fg/20 hover:bg-fg/10 hover:text-fg"
+                            >
+                              <FolderOpen className="h-3.5 w-3.5 text-accent/70" />
+                              {t("hfBrowser.selectFromLibrary")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void browseSdMainModel()}
+                              className="rounded-md border border-fg/10 px-2.5 py-1.5 text-[12px] font-medium text-fg/65 transition hover:border-fg/20 hover:bg-fg/5 hover:text-fg/90"
+                            >
+                              {t("common.buttons.browseFiles")}
+                            </button>
+                          </div>
+                        }
+                      >
                         <div className="space-y-3">
-                          <button
-                            type="button"
-                            onClick={() => setShowSdModelPicker(true)}
-                            className="flex w-full items-center justify-between rounded-lg border border-fg/10 bg-surface-el/20 px-4 py-3 text-left text-fg transition hover:bg-surface-el/30"
-                          >
-                            <div className="min-w-0">
-                              <span className="block truncate text-[13px] text-fg/85">
-                                {selectedSdEntry?.name ||
-                                  editorModel.name ||
-                                  t("editModel.localDiffusion.selectModel")}
-                              </span>
-                              {selectedSdEntry ? (
-                                <span className="block text-[12px] uppercase text-fg/40">
-                                  {selectedSdEntry.family}
-                                  {selectedSdEntry.totalBytes > 0
-                                    ? ` · ${formatBytes(selectedSdEntry.totalBytes)}`
-                                    : ""}
-                                </span>
-                              ) : null}
-                            </div>
-                            <ChevronDown className="h-4 w-4 shrink-0 text-fg/40" />
-                          </button>
+                          <input
+                            type="text"
+                            value={sdMainPathDraft}
+                            onChange={(e) => setSdMainPathDraft(e.target.value)}
+                            onBlur={(e) => void commitSdMainModel(e.target.value)}
+                            placeholder={t("editModel.localDiffusion.pathPlaceholder")}
+                            className="w-full rounded-lg border border-fg/10 bg-surface-el/20 px-4 py-3 font-mono text-[13px] text-fg placeholder-fg/40 transition focus:border-fg/30 focus:outline-none"
+                          />
+                          <p className="text-[13px] leading-relaxed text-fg/45">
+                            {selectedSdEntry
+                              ? `${selectedSdEntry.name} · ${selectedSdEntry.family.toUpperCase()}${selectedSdEntry.totalBytes > 0 ? ` · ${formatBytes(selectedSdEntry.totalBytes)}` : ""}`
+                              : t("editModel.localDiffusion.idHelp")}
+                          </p>
                           <BottomMenu
                             isOpen={showSdModelPicker}
                             onClose={() => setShowSdModelPicker(false)}
