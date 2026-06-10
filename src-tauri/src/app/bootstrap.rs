@@ -75,7 +75,6 @@ fn manage_core_state(app: &mut tauri::App) -> Arc<usage::app_activity::AppActive
     app.manage(sync::manager::SyncManagerState::new());
     app.manage(host_api::HostApiManager::default());
     app.manage(crate::asr_manager::WhisperRuntimeState::default());
-    app.manage(crate::sdcpp::SdcppState::default());
 
     app_usage_service
 }

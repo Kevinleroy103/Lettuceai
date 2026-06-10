@@ -29,7 +29,6 @@ pub mod ollama;
 mod platform;
 pub mod pricing_cache;
 pub mod providers;
-pub mod sdcpp;
 pub mod storage_manager;
 pub mod sync;
 pub mod tls;

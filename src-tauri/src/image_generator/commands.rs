@@ -120,34 +120,26 @@ pub async fn generate_image(
             format!("Generating image with model: {}", request.model),
         );
 
+        let provider_cred = crate::storage_manager::providers::get_provider_credential(
+            &app,
+            &request.credential_id,
+        )?;
+        provider_label = provider_cred.label.clone();
+
         let adapter = get_adapter(&request.provider_id)?;
 
-        let (api_key, base_url, headers_map) = if request.provider_id == crate::sdcpp::PROVIDER_ID
-        {
-            provider_label = crate::sdcpp::PROVIDER_LABEL.to_string();
-            let base_url = crate::sdcpp::ensure_server_running(&app).await?;
-            (String::new(), base_url, None)
+        let api_key = if !adapter.requires_api_key() {
+            provider_cred.api_key.unwrap_or_default()
         } else {
-            let provider_cred = crate::storage_manager::providers::get_provider_credential(
-                &app,
-                &request.credential_id,
-            )?;
-            provider_label = provider_cred.label.clone();
-
-            let api_key = if !adapter.requires_api_key() {
-                provider_cred.api_key.unwrap_or_default()
-            } else {
-                provider_cred
-                    .api_key
-                    .ok_or_else(|| "API key not found for provider".to_string())?
-            };
-
-            let base_url = resolve_base_url(
-                &ProviderId(request.provider_id.clone()),
-                provider_cred.base_url.as_deref(),
-            );
-            (api_key, base_url, provider_cred.headers)
+            provider_cred
+                .api_key
+                .ok_or_else(|| "API key not found for provider".to_string())?
         };
+
+        let base_url_opt = provider_cred.base_url.as_deref();
+        let headers_map = provider_cred.headers;
+
+        let base_url = resolve_base_url(&ProviderId(request.provider_id.clone()), base_url_opt);
 
         let url = if request.provider_id == "gemini" {
             format!(
@@ -265,10 +257,6 @@ pub async fn generate_image(
         ))
     }
     .await;
-
-    if request.provider_id == crate::sdcpp::PROVIDER_ID {
-        crate::sdcpp::mark_used(&app);
-    }
 
     match &result {
         Ok((response, usage_summary)) => record_image_generation_usage(
