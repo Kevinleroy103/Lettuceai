@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   ChevronRight,
+  Cpu,
   EthernetPort,
   Edit3,
   Trash2,
@@ -373,26 +374,48 @@ export function ModelsPage() {
         {/* Active/completed downloads from HuggingFace browser */}
         <ModelsDownloadIndicator />
 
-        {/* Browse GGUF Models button */}
+        {/* Browse GGUF Models + Runtime Defaults */}
         {models.length > 0 && (
-          <button
-            onClick={() => navigate(Routes.settingsModelsBrowse)}
-            className={cn(
-              "group hidden w-full rounded-xl border border-dashed border-fg/15 bg-fg/2 px-4 py-3 text-left transition md:block",
-              "hover:border-fg/25 hover:bg-fg/5 active:scale-[0.995]",
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-fg/10 bg-fg/5">
-                <Download size={14} className="text-fg/50" />
+          <div className="hidden gap-3 md:grid md:grid-cols-2">
+            <button
+              onClick={() => navigate(Routes.settingsModelsBrowse)}
+              className={cn(
+                "group w-full rounded-xl border border-dashed border-fg/15 bg-fg/2 px-4 py-3 text-left transition",
+                "hover:border-fg/25 hover:bg-fg/5 active:scale-[0.995]",
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-fg/10 bg-fg/5">
+                  <Download size={14} className="text-fg/50" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-fg/70">{t("hfBrowser.title")}</span>
+                  <p className="text-[11px] text-fg/40">{t("hfBrowser.browseOnHuggingFace")}</p>
+                </div>
+                <ChevronRight size={14} className="text-fg/25 group-hover:text-fg/50 transition" />
               </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium text-fg/70">{t("hfBrowser.title")}</span>
-                <p className="text-[11px] text-fg/40">{t("hfBrowser.browseOnHuggingFace")}</p>
+            </button>
+            <button
+              onClick={() => navigate(Routes.settingsModelsRuntimeDefaults)}
+              className={cn(
+                "group w-full rounded-xl border border-dashed border-fg/15 bg-fg/2 px-4 py-3 text-left transition",
+                "hover:border-fg/25 hover:bg-fg/5 active:scale-[0.995]",
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-fg/10 bg-fg/5">
+                  <Cpu size={14} className="text-fg/50" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-fg/70">
+                    {t("runtimeDefaults.title")}
+                  </span>
+                  <p className="text-[11px] text-fg/40">{t("runtimeDefaults.subtitle")}</p>
+                </div>
+                <ChevronRight size={14} className="text-fg/25 group-hover:text-fg/50 transition" />
               </div>
-              <ChevronRight size={14} className="text-fg/25 group-hover:text-fg/50 transition" />
-            </div>
-          </button>
+            </button>
+          </div>
         )}
 
         {/* Model Cards */}

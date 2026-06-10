@@ -154,6 +154,10 @@ export async function sdRemoveBinary(): Promise<void> {
   return invoke<void>("sd_remove_binary");
 }
 
+export async function sdSetCustomBinary(path: string): Promise<SdBinaryInfo> {
+  return invoke<SdBinaryInfo>("sd_set_custom_binary", { path });
+}
+
 export async function sdCancelGeneration(): Promise<boolean> {
   return invoke<boolean>("sd_cancel_generation");
 }

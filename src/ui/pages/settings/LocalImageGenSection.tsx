@@ -1,21 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cpu, Download, HardDrive, Search, Trash2 } from "lucide-react";
+import { Cpu, HardDrive, Search, Trash2 } from "lucide-react";
 
 import {
   sdDeleteModel,
-  sdFinalizeBinaryInstall,
   sdGetStatus,
-  sdListEngineVariants,
   sdListModels,
-  sdQueueBinaryInstall,
-  sdRemoveBinary,
   sdRemoveModelRow,
-  type SdEngineVariant,
   type SdModelEntry,
   type SdStatus,
 } from "../../../core/local-diffusion";
-import { useDownloadQueue } from "../../../core/downloads/DownloadQueueContext";
 import { useI18n } from "../../../core/i18n/context";
 import { Routes } from "../../navigation";
 import { toast } from "../../components/toast";
@@ -30,14 +24,8 @@ function formatBytes(bytes: number): string {
 export function LocalImageGenSection() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { queue } = useDownloadQueue();
   const [status, setStatus] = useState<SdStatus | null>(null);
   const [models, setModels] = useState<SdModelEntry[]>([]);
-  const [variants, setVariants] = useState<SdEngineVariant[] | null>(null);
-  const [variantsError, setVariantsError] = useState<string | null>(null);
-  const [selectedVariant, setSelectedVariant] = useState<string>("");
-  const [installing, setInstalling] = useState(false);
-  const finalizedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,85 +40,6 @@ export function LocalImageGenSection() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  useEffect(() => {
-    if (!status || status.binary || variants) return;
-    sdListEngineVariants()
-      .then((list) => {
-        setVariants(list);
-        setVariantsError(null);
-        const recommended = list.find((variant) => variant.recommended);
-        setSelectedVariant((current) => current || recommended?.id || list[0]?.id || "");
-      })
-      .catch((err) => {
-        setVariantsError(err instanceof Error ? err.message : String(err));
-      });
-  }, [status, variants]);
-
-  const engineItems = useMemo(
-    () => queue.filter((item) => item.queueKind === "sdcpp"),
-    [queue],
-  );
-  const engineActive = engineItems.some(
-    (item) => item.status === "queued" || item.status === "downloading",
-  );
-  const engineFailed = engineItems.find((item) => item.status === "error");
-  const engineProgress = useMemo(() => {
-    const total = engineItems.reduce((sum, item) => sum + item.total, 0);
-    const downloaded = engineItems.reduce((sum, item) => sum + item.downloaded, 0);
-    return total > 0 ? Math.round((downloaded / total) * 100) : 0;
-  }, [engineItems]);
-
-  useEffect(() => {
-    if (!installing || engineItems.length === 0) return;
-    if (engineActive || finalizedRef.current) return;
-    if (engineItems.every((item) => item.status === "complete")) {
-      finalizedRef.current = true;
-      sdFinalizeBinaryInstall()
-        .then(() => {
-          toast.success(t("imageGeneration.local.engineInstalled"));
-          setInstalling(false);
-          void refresh();
-        })
-        .catch((err) => {
-          toast.error(
-            t("imageGeneration.local.engineInstallFailed"),
-            err instanceof Error ? err.message : String(err),
-          );
-          setInstalling(false);
-        });
-    } else if (engineFailed) {
-      toast.error(t("imageGeneration.local.engineInstallFailed"), engineFailed.error ?? "");
-      setInstalling(false);
-    }
-  }, [installing, engineActive, engineFailed, engineItems, refresh, t]);
-
-  const startEngineInstall = async () => {
-    try {
-      finalizedRef.current = false;
-      setInstalling(true);
-      await sdQueueBinaryInstall(selectedVariant || null);
-    } catch (err) {
-      setInstalling(false);
-      toast.error(
-        t("imageGeneration.local.engineInstallFailed"),
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  };
-
-  const removeEngine = async () => {
-    try {
-      await sdRemoveBinary();
-      setVariants(null);
-      void refresh();
-    } catch (err) {
-      toast.error(
-        t("imageGeneration.local.engineRemoveFailed"),
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  };
 
   const deleteEntry = async (entry: SdModelEntry) => {
     try {
@@ -151,85 +60,25 @@ export function LocalImageGenSection() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-[12px] border border-fg/10 bg-fg/5">
-        <div className="flex items-start justify-between gap-3 border-b border-fg/8 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-[9px] border border-info/30 bg-info/10 p-1.5 text-info/80">
-              <Cpu className="h-4 w-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-fg">
-                {t("imageGeneration.local.engineTitle")}
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-fg/48">
-                {status.binary
-                  ? t("imageGeneration.local.engineInstalledDescription")
-                  : t("imageGeneration.local.engineDescription")}
-              </p>
-            </div>
+      {!status.binary ? (
+        <button
+          type="button"
+          onClick={() => navigate(Routes.settingsModelsRuntimeDefaults)}
+          className="flex w-full items-center gap-3 rounded-[12px] border border-dashed border-fg/15 bg-fg/2 px-4 py-3 text-left transition hover:border-fg/25 hover:bg-fg/5"
+        >
+          <div className="rounded-[9px] border border-info/30 bg-info/10 p-1.5 text-info/80">
+            <Cpu className="h-4 w-4" />
           </div>
-        </div>
-        <div className="px-4 py-4">
-          {status.binary ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-fg/70">
-                <span className="font-medium text-fg">{status.binary.variant}</span>
-                <span className="ml-2 text-xs text-fg/45">{status.binary.releaseTag}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => void removeEngine()}
-                className="rounded-[9px] border border-danger/25 px-3 py-1.5 text-xs font-medium text-danger/80 transition-colors hover:bg-danger/10"
-              >
-                {t("common.buttons.remove")}
-              </button>
-            </div>
-          ) : engineActive || installing ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-fg/55">
-                <span>{t("imageGeneration.local.engineDownloading")}</span>
-                <span>{engineProgress}%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-fg/10">
-                <div
-                  className="h-full rounded-full bg-accent transition-all"
-                  style={{ width: `${engineProgress}%` }}
-                />
-              </div>
-            </div>
-          ) : variantsError ? (
-            <p className="text-xs leading-5 text-danger/80">{variantsError}</p>
-          ) : !variants ? (
-            <p className="text-xs text-fg/45">{t("imageGeneration.local.engineLoadingVariants")}</p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={selectedVariant}
-                onChange={(event) => setSelectedVariant(event.target.value)}
-                className="rounded-[9px] border border-fg/12 bg-surface/60 px-3 py-2 text-sm text-fg focus:border-fg/25 focus:outline-none"
-              >
-                {variants.map((variant) => (
-                  <option key={variant.id} value={variant.id}>
-                    {variant.id}
-                    {variant.recommended
-                      ? ` (${t("imageGeneration.local.recommended")})`
-                      : ""}{" "}
-                    · {formatBytes(variant.size)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void startEngineInstall()}
-                className="inline-flex items-center gap-2 rounded-[9px] border border-accent/35 bg-accent/12 px-3.5 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20"
-              >
-                <Download className="h-4 w-4" />
-                {t("imageGeneration.local.installEngine")}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-fg/70">
+              {t("imageGeneration.local.engineMissingTitle")}
+            </p>
+            <p className="text-xs text-fg/40">
+              {t("imageGeneration.local.engineMissingDescription")}
+            </p>
+          </div>
+        </button>
+      ) : null}
 
       <section className="rounded-[12px] border border-fg/10 bg-fg/5">
         <div className="flex items-start justify-between gap-3 border-b border-fg/8 px-4 py-4">

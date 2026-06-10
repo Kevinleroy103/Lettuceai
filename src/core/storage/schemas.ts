@@ -2912,6 +2912,10 @@ export const SettingsSchema = z.object({
       dynamicMemoryStructuredFallbackFormat:
         DynamicMemoryStructuredFallbackFormatSchema.optional(),
       dynamicMemoryLlamaSamplerOverwriteEnabled: z.boolean().optional(),
+      llamaDefaultContextLength: z.number().int().min(512).max(1048576).optional(),
+      llamaDefaultKvCacheType: z.enum(["auto", "f16", "q8_0", "q4_0"]).optional(),
+      sdDefaultOffloadMode: z.enum(["auto", "gpu", "mixed"]).optional(),
+      sdDefaultSize: z.string().optional(),
       avatarGenerationEnabled: z.boolean().optional(),
       avatarGenerationModelId: z.string().optional(),
       sceneGenerationEnabled: z.boolean().optional(),

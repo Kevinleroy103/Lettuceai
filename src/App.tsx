@@ -19,6 +19,7 @@ import { ModelsPage } from "./ui/pages/settings/ModelsPage";
 import { EditModelPage } from "./ui/pages/settings/EditModelPage";
 import { HuggingFaceBrowserPage } from "./ui/pages/settings/HuggingFaceBrowserPage";
 import { InstalledModelsPage } from "./ui/pages/settings/InstalledModelsPage";
+import { LocalRuntimeDefaultsPage } from "./ui/pages/settings/LocalRuntimeDefaultsPage";
 import { ImageGenerationPage } from "./ui/pages/settings/ImageGenerationPage";
 import { SystemPromptsPage } from "./ui/pages/settings/SystemPromptsPage";
 import { EditPromptTemplate } from "./ui/pages/settings/EditPromptTemplate";
@@ -1147,6 +1148,10 @@ function AppContent() {
               <Route path="/settings/models/new" element={<EditModelPage />} />
               <Route path="/settings/models/browse" element={<HuggingFaceBrowserPage />} />
               <Route path="/settings/models/installed" element={<InstalledModelsPage />} />
+              <Route
+                path="/settings/models/runtime-defaults"
+                element={<LocalRuntimeDefaultsPage />}
+              />
               <Route path="/settings/models/:modelId" element={<EditModelPage />} />
               <Route path="/settings/voices" element={<VoicesPage />} />
               <Route

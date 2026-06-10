@@ -98,6 +98,7 @@ export const Routes = {
   settingsModelsNew: "/settings/models/new",
   settingsModelsBrowse: "/settings/models/browse",
   settingsModelsInstalled: "/settings/models/installed",
+  settingsModelsRuntimeDefaults: "/settings/models/runtime-defaults",
   settingsModel: (modelId: string) => `/settings/models/${modelId}`,
   settingsImageGeneration: "/settings/image-generation",
   createPersona: "/create/persona",
