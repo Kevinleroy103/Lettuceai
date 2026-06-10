@@ -753,6 +753,7 @@ fn render_scene_generation_prompt_content(
     persona: Option<&Persona>,
     recent_messages_text: &str,
     has_chat_background: bool,
+    image_model_instructions: &str,
 ) -> String {
     let mut prompt = template_content.to_string();
     let char_name = character.name.as_str();
@@ -833,6 +834,7 @@ fn render_scene_generation_prompt_content(
     prompt = prompt.replace("{{persona.name}}", persona_name);
     prompt = prompt.replace("{{persona.desc}}", &persona_desc);
     prompt = prompt.replace("{{recent_messages}}", recent_messages_text);
+    prompt = prompt.replace("{{image_model_instructions}}", image_model_instructions);
     let scene_request = if let Some(persona) = persona {
         format!(
             "Create one polished scene image prompt for the visual moment described by the recent messages. Focus on the currently active beat involving {} and {}. Keep {} and {} visually distinct, and make the result immediately usable for image generation.",
@@ -1198,6 +1200,22 @@ fn render_scene_generation_prompt_entries(
     reference_images: &SceneReferenceImages,
 ) -> Vec<SystemPromptEntry> {
     let (template_entries, condense_prompt_entries) = load_scene_prompt_writer_entries(app);
+    let image_model_instructions = resolve_image_generation_target(
+        settings,
+        settings
+            .advanced_settings
+            .as_ref()
+            .and_then(|advanced| advanced.scene_generation_model_id.as_deref()),
+    )
+    .ok()
+    .and_then(|(image_model, _)| {
+        image_model
+            .advanced_model_settings
+            .as_ref()
+            .and_then(|advanced| advanced.sd_prompt_writer_instructions.clone())
+    })
+    .map(|value| value.trim().to_string())
+    .unwrap_or_default();
     let mut rendered_entries = Vec::new();
     let has_scene = session.selected_scene_id.is_some() || character.default_scene_id.is_some();
     let has_scene_direction = if let Some(scene_id) = session
@@ -1286,6 +1304,7 @@ fn render_scene_generation_prompt_entries(
             persona,
             recent_messages_text,
             !reference_images.chat_background_images.is_empty(),
+            &image_model_instructions,
         );
         if rendered.trim().is_empty() && entry.prompt_entry_payload.is_none() {
             continue;

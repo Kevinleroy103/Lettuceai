@@ -2534,6 +2534,48 @@ export function EditModelPage() {
                                   />
                                 </div>
 
+                                <div className="space-y-4">
+                                  <div className="space-y-0.5">
+                                    <span className="block text-[13px] font-medium text-fg/70">
+                                      {t("editModel.generationDescriptions.sdExtraPromptTitle")}
+                                    </span>
+                                    <span className="block text-[13px] text-fg/40">
+                                      {t("editModel.generationDescriptions.sdExtraPrompt")}
+                                    </span>
+                                  </div>
+                                  <textarea
+                                    value={modelAdvancedDraft.sdExtraPrompt ?? ""}
+                                    onChange={(e) =>
+                                      updateSdSetting("sdExtraPrompt", e.target.value)
+                                    }
+                                    placeholder={t("editModel.placeholders.sdExtraPrompt")}
+                                    rows={4}
+                                    className={textAreaInputClassName}
+                                  />
+                                </div>
+
+                                <div className="space-y-4">
+                                  <div className="space-y-0.5">
+                                    <span className="block text-[13px] font-medium text-fg/70">
+                                      {t(
+                                        "editModel.generationDescriptions.sdWriterInstructionsTitle",
+                                      )}
+                                    </span>
+                                    <span className="block text-[13px] text-fg/40">
+                                      {t("editModel.generationDescriptions.sdWriterInstructions")}
+                                    </span>
+                                  </div>
+                                  <textarea
+                                    value={modelAdvancedDraft.sdPromptWriterInstructions ?? ""}
+                                    onChange={(e) =>
+                                      updateSdSetting("sdPromptWriterInstructions", e.target.value)
+                                    }
+                                    placeholder={t("editModel.placeholders.sdWriterInstructions")}
+                                    rows={4}
+                                    className={textAreaInputClassName}
+                                  />
+                                </div>
+
                                 {isLocalDiffusionModel ? (
                                   <div className="space-y-4">
                                     <div className="space-y-0.5">

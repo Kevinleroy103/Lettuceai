@@ -101,6 +101,20 @@ pub async fn generate_image(
     app: AppHandle,
     mut request: ImageGenerationRequest,
 ) -> Result<ImageGenerationResponse, String> {
+    let extra_prompt = request
+        .advanced_model_settings
+        .as_ref()
+        .and_then(|settings| settings.sd_extra_prompt.as_ref())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if let Some(extra) = extra_prompt {
+        request.prompt = if request.prompt.trim().is_empty() {
+            extra
+        } else {
+            format!("{}, {}", extra, request.prompt)
+        };
+    }
+
     if request.provider_id == crate::local_diffusion::PROVIDER_ID {
         let result = crate::local_diffusion::generate::generate(&app, &request).await;
         match &result {

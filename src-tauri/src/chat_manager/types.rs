@@ -593,6 +593,10 @@ pub struct AdvancedModelSettings {
     pub sd_size: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_offload_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sd_extra_prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sd_prompt_writer_instructions: Option<String>,
     pub llama_gpu_layers: Option<u32>,
     pub llama_threads: Option<u32>,
     pub llama_threads_batch: Option<u32>,
@@ -678,6 +682,8 @@ impl Default for AdvancedModelSettings {
             top_k: None,
             sd_steps: None,
             sd_offload_mode: None,
+            sd_extra_prompt: None,
+            sd_prompt_writer_instructions: None,
             sd_cfg_scale: None,
             sd_sampler: None,
             sd_seed: None,
