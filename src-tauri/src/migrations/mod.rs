@@ -7,7 +7,7 @@ use crate::storage_manager::settings::{read_settings_typed, write_settings_typed
 use crate::utils::log_info;
 
 /// Current migration version
-pub const CURRENT_MIGRATION_VERSION: u32 = 74;
+pub const CURRENT_MIGRATION_VERSION: u32 = 75;
 
 pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
     log_info(app, "migrations", "Starting migration check");
@@ -777,6 +777,16 @@ pub fn run_migrations(app: &AppHandle) -> Result<(), String> {
         );
         migrate_v73_to_v74(app)?;
         version = 74;
+    }
+
+    if version < 75 {
+        log_info(
+            app,
+            "migrations",
+            "Running migration v74 -> v75: Add lora fields to characters and personas",
+        );
+        migrate_v74_to_v75(app)?;
+        version = 75;
     }
 
     // Update the stored version
@@ -4033,6 +4043,15 @@ fn migrate_v72_to_v73(app: &AppHandle) -> Result<(), String> {
 fn migrate_v73_to_v74(app: &AppHandle) -> Result<(), String> {
     let conn = crate::storage_manager::db::open_db(app)?;
     let _ = conn.execute("ALTER TABLE group_sessions ADD COLUMN author_note TEXT", []);
+    Ok(())
+}
+
+fn migrate_v74_to_v75(app: &AppHandle) -> Result<(), String> {
+    let conn = crate::storage_manager::db::open_db(app)?;
+    let _ = conn.execute("ALTER TABLE characters ADD COLUMN lora_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE characters ADD COLUMN lora_strength REAL", []);
+    let _ = conn.execute("ALTER TABLE personas ADD COLUMN lora_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE personas ADD COLUMN lora_strength REAL", []);
     Ok(())
 }
 

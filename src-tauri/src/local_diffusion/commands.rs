@@ -122,6 +122,60 @@ pub async fn sd_list_local_files(app: AppHandle) -> Result<Vec<SdLocalFile>, Str
     Ok(files)
 }
 
+pub fn loras_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = crate::infra::utils::ensure_lettuce_dir(app)?
+        .join("models")
+        .join("loras");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[tauri::command]
+pub async fn sd_list_loras(app: AppHandle) -> Result<Vec<SdLocalFile>, String> {
+    let mut files = Vec::new();
+    collect_model_files(&loras_dir(&app)?, &mut files);
+    files.sort_by(|a, b| a.filename.to_lowercase().cmp(&b.filename.to_lowercase()));
+    Ok(files)
+}
+
+#[tauri::command]
+pub async fn sd_import_lora(app: AppHandle, path: String) -> Result<SdLocalFile, String> {
+    let source = std::path::PathBuf::from(&path);
+    if !source.is_file() {
+        return Err(format!("File not found: {path}"));
+    }
+    let filename = source
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .ok_or_else(|| "Invalid file name".to_string())?;
+    let destination = loras_dir(&app)?.join(&filename);
+    if !destination.is_file() {
+        std::fs::copy(&source, &destination).map_err(|e| format!("Failed to copy LoRA: {e}"))?;
+    }
+    let size = std::fs::metadata(&destination)
+        .map(|meta| meta.len())
+        .unwrap_or(0);
+    Ok(SdLocalFile {
+        filename,
+        path: destination.to_string_lossy().to_string(),
+        size,
+    })
+}
+
+#[tauri::command]
+pub async fn sd_delete_lora(app: AppHandle, filename: String) -> Result<bool, String> {
+    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("Invalid LoRA file name".to_string());
+    }
+    let path = loras_dir(&app)?.join(&filename);
+    if path.is_file() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 #[tauri::command]
 pub async fn sd_set_model_file(
     app: AppHandle,

@@ -323,6 +323,23 @@ fn read_character(conn: &rusqlite::Connection, id: &str) -> Result<JsonValue, St
     if let Some(b) = bg_path {
         root.insert("backgroundImagePath".into(), JsonValue::String(b));
     }
+    if let Ok((lora_name, lora_strength)) = conn.query_row(
+        "SELECT lora_name, lora_strength FROM characters WHERE id = ?",
+        params![id],
+        |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, Option<f64>>(1)?,
+            ))
+        },
+    ) {
+        if let Some(value) = lora_name {
+            root.insert("loraName".into(), JsonValue::String(value));
+        }
+        if let Some(value) = lora_strength {
+            root.insert("loraStrength".into(), JsonValue::from(value));
+        }
+    }
     let resolved_definition = definition.or_else(|| description.clone());
     if let Some(def) = resolved_definition {
         root.insert("definition".into(), JsonValue::String(def));
@@ -887,6 +904,16 @@ fn upsert_character_value(app: &tauri::AppHandle, c: &JsonValue) -> Result<JsonV
             now
         ],
     ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
+    tx.execute(
+        "UPDATE characters SET lora_name = ?, lora_strength = ? WHERE id = ?",
+        params![
+            c.get("loraName").and_then(|v| v.as_str()).map(str::to_string),
+            c.get("loraStrength").and_then(|v| v.as_f64()),
+            &id
+        ],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
     // Replace rules
     tx.execute(

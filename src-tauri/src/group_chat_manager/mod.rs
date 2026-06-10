@@ -4719,6 +4719,8 @@ fn load_character(conn: &rusqlite::Connection, character_id: &str) -> Result<Cha
         avatar_path: row.2,
         design_description: row.3,
         design_reference_image_ids,
+        lora_name: None,
+        lora_strength: None,
         background_image_path: row.5,
         description,
         definition,

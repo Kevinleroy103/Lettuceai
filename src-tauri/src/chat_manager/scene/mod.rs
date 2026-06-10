@@ -642,6 +642,39 @@ fn build_scene_generation_request(
 
     prompt_sections.push(scene_prompt.trim().to_string());
 
+    if model.provider_id == crate::local_diffusion::PROVIDER_ID {
+        let mut lora_tags = Vec::new();
+        if let Some(name) = character
+            .lora_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            lora_tags.push(format!(
+                "<lora:{}:{}>",
+                name,
+                character.lora_strength.unwrap_or(0.8)
+            ));
+        }
+        if let Some(persona) = persona {
+            if let Some(name) = persona
+                .lora_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                lora_tags.push(format!(
+                    "<lora:{}:{}>",
+                    name,
+                    persona.lora_strength.unwrap_or(0.8)
+                ));
+            }
+        }
+        if !lora_tags.is_empty() {
+            prompt_sections.insert(0, lora_tags.join(" "));
+        }
+    }
+
     ImageGenerationRequest {
         prompt: prompt_sections.join("\n\n"),
         model: model.name.clone(),

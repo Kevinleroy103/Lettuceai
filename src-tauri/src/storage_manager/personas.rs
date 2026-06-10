@@ -50,6 +50,23 @@ where
         ) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
         let mut obj = JsonMap::new();
+        if let Ok((lora_name, lora_strength)) = conn.query_row(
+            "SELECT lora_name, lora_strength FROM personas WHERE id = ?",
+            params![&id],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<f64>>(1)?,
+                ))
+            },
+        ) {
+            if let Some(value) = lora_name {
+                obj.insert("loraName".into(), JsonValue::String(value));
+            }
+            if let Some(value) = lora_strength {
+                obj.insert("loraStrength".into(), JsonValue::from(value));
+            }
+        }
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title));
         obj.insert("description".into(), JsonValue::String(description));
@@ -173,6 +190,23 @@ pub fn personas_list(app: tauri::AppHandle) -> Result<String, String> {
             updated_at,
         ) = row.map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
         let mut obj = JsonMap::new();
+        if let Ok((lora_name, lora_strength)) = conn.query_row(
+            "SELECT lora_name, lora_strength FROM personas WHERE id = ?",
+            params![&id],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<f64>>(1)?,
+                ))
+            },
+        ) {
+            if let Some(value) = lora_name {
+                obj.insert("loraName".into(), JsonValue::String(value));
+            }
+            if let Some(value) = lora_strength {
+                obj.insert("loraStrength".into(), JsonValue::from(value));
+            }
+        }
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title.to_string()));
         obj.insert(
@@ -312,6 +346,17 @@ fn upsert_persona_value(app: &tauri::AppHandle, p: &JsonValue) -> Result<JsonVal
         ],
     ).map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
 
+    let lora_name = p
+        .get("loraName")
+        .and_then(|v| v.as_str())
+        .map(|value| value.to_string());
+    let lora_strength = p.get("loraStrength").and_then(|v| v.as_f64());
+    tx.execute(
+        "UPDATE personas SET lora_name = ?, lora_strength = ? WHERE id = ?",
+        params![&lora_name, lora_strength, &id],
+    )
+    .map_err(|e| crate::utils::err_to_string(module_path!(), line!(), e))?;
+
     if is_default != 0 {
         tx.execute(
             "UPDATE personas SET is_default = 0 WHERE id <> ?",
@@ -355,6 +400,12 @@ fn upsert_persona_value(app: &tauri::AppHandle, p: &JsonValue) -> Result<JsonVal
             obj.insert("activeLorebookIds".into(), serde_json::json!(parsed));
         }
     }
+    if let Some(value) = lora_name {
+        obj.insert("loraName".into(), JsonValue::String(value));
+    }
+    if let Some(value) = lora_strength {
+        obj.insert("loraStrength".into(), JsonValue::from(value));
+    }
     obj.insert("isDefault".into(), JsonValue::Bool(is_default != 0));
     obj.insert("createdAt".into(), JsonValue::from(created_at));
     obj.insert("updatedAt".into(), JsonValue::from(now));
@@ -393,6 +444,23 @@ pub fn persona_default_get(app: tauri::AppHandle) -> Result<Option<String>, Stri
     )) = row
     {
         let mut obj = JsonMap::new();
+        if let Ok((lora_name, lora_strength)) = conn.query_row(
+            "SELECT lora_name, lora_strength FROM personas WHERE id = ?",
+            params![&id],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<f64>>(1)?,
+                ))
+            },
+        ) {
+            if let Some(value) = lora_name {
+                obj.insert("loraName".into(), JsonValue::String(value));
+            }
+            if let Some(value) = lora_strength {
+                obj.insert("loraStrength".into(), JsonValue::from(value));
+            }
+        }
         obj.insert("id".into(), JsonValue::String(id));
         obj.insert("title".into(), JsonValue::String(title.to_string()));
         obj.insert(

@@ -1126,6 +1126,8 @@ fn dummy_character() -> crate::chat_manager::types::Character {
         avatar_path: None,
         design_description: None,
         design_reference_image_ids: Vec::new(),
+        lora_name: None,
+        lora_strength: None,
         background_image_path: None,
         definition: None,
         description: None,

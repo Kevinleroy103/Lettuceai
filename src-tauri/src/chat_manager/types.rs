@@ -998,6 +998,10 @@ pub struct Character {
     pub design_description: Option<String>,
     #[serde(default)]
     pub design_reference_image_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lora_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lora_strength: Option<f64>,
     #[serde(default)]
     pub background_image_path: Option<String>,
     #[serde(default)]
@@ -1058,6 +1062,10 @@ pub struct Persona {
     pub design_description: Option<String>,
     #[serde(default)]
     pub design_reference_image_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lora_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lora_strength: Option<f64>,
     #[serde(default)]
     pub active_lorebook_ids: Vec<String>,
     #[serde(default)]

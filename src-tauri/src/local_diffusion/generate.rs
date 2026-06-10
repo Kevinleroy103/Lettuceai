@@ -435,7 +435,19 @@ async fn run_generation(
     };
 
     let out_path = tmp_dir.join("out.png");
-    let args = build_args(entry, request, &out_path, init_image.as_ref(), mode_override);
+    let mut args = build_args(entry, request, &out_path, init_image.as_ref(), mode_override);
+    if let Ok(loras) = super::commands::loras_dir(app) {
+        let has_loras = fs::read_dir(&loras)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+        if has_loras {
+            args.extend([
+                "--lora-model-dir".into(),
+                loras.to_string_lossy().to_string(),
+            ]);
+        }
+    }
+    let args = args;
     let offload_flags: Vec<&String> = args
         .iter()
         .filter(|arg| {
